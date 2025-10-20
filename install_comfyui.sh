@@ -138,10 +138,24 @@ else
   say "Python $PYTHON_VERSION already present in pyenv."
 fi
 
+# =================== Ask for ComfyUI install location =============
+DEFAULT_DIR="${HOME}/ComfyUI"
+ask "Enter install location for ComfyUI [default: $DEFAULT_DIR]:"
+read -r INSTALL_DIR
+INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
+# Expand leading ~ to $HOME
+INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
+
+# Sanity checks & prepare parent directories
+if [[ -e "$INSTALL_DIR" && ! -d "$INSTALL_DIR" ]]; then
+  err "Path exists and is not a directory: $INSTALL_DIR"
+  exit 1
+fi
+mkdir -p "$(dirname "$INSTALL_DIR")"
+
 # ======================= ComfyUI + venv ===========================
-INSTALL_DIR="${HOME}/ComfyUI"
-if [[ ! -d "$INSTALL_DIR" ]]; then
-  say "Cloning ComfyUI..."
+if [[ ! -d "$INSTALL_DIR" || ! -d "$INSTALL_DIR/.git" ]]; then
+  say "Cloning ComfyUI into: $INSTALL_DIR"
   git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$INSTALL_DIR"
 else
   say "ComfyUI directory exists; pulling latest..."
@@ -166,7 +180,7 @@ if [[ ! "$READY" =~ ^[Yy]$ ]]; then
   exit 0
 fi
 
-# =================== Select Torch/CUDA by GPU tier ================
+# =================== Select Torch/CUDA by GPU tier =================
 # Defaults can still be overridden by env (TORCH_VER, etc.)
 if [[ "${GPU_TIER}" == "2" ]]; then
   # NVIDIA 3000 and below → PyTorch 2.7.1 + CUDA 12.1 path
