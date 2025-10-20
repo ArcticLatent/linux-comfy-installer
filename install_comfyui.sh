@@ -181,25 +181,21 @@ if [[ ! "$READY" =~ ^[Yy]$ ]]; then
 fi
 
 # =================== Select Torch/CUDA by GPU tier =================
-# Defaults can still be overridden by env (TORCH_VER, etc.)
+# For option 2, we use version PAIRS with fallback to avoid resolver errors.
 if [[ "${GPU_TIER}" == "2" ]]; then
-  # NVIDIA 3000 and below → PyTorch 2.7.1 + CUDA 12.1 path
-  TORCH_VER="${TORCH_VER:-2.7.1}"
-  VISION_VER="${VISION_VER:-0.22.0}"
+  TORCH_PAIRS=("2.7.1 0.22.1" "2.7.0 0.22.0")   # (torch vision)
   AUDIO_VER="${AUDIO_VER:-2.7.1}"
-  TRITON_VER="${TRITON_VER:-}"         # let pip resolve a compatible triton for 2.7.1 (or omit)
-  TRY_CUDA_STREAMS=("cu121" "cu118")   # prefer cu121; fallback to cu118; CPU if both fail
+  TRITON_VER="${TRITON_VER:-}"                  # let pip resolve or omit for 2.7.x
+  TRY_CUDA_STREAMS=("cu121" "cu118")            # CUDA streams to try
 else
-  # NVIDIA 4000+ (your existing defaults)
-  TORCH_VER="${TORCH_VER:-2.8.0}"
-  VISION_VER="${VISION_VER:-0.23.0}"
+  TORCH_PAIRS=("2.8.0 0.23.0")
   AUDIO_VER="${AUDIO_VER:-2.8.0}"
   TRITON_VER="${TRITON_VER:-3.4.0}"
   TRY_CUDA_STREAMS=("cu128" "cu126" "cu124")
 fi
 
 # =================== PyTorch stack (native attention) =============
-say "Installing PyTorch ${TORCH_VER} (CUDA wheels), native attention (no xformers)..."
+say "Installing PyTorch (CUDA wheels), native attention (no xformers)..."
 
 # Clean slate so the resolver can't fight older remnants
 python - <<'PY'
@@ -214,38 +210,51 @@ PY
 
 PYTORCH_OK=0
 CUDA_PICKED=""
+TORCH_VER=""
+VISION_VER=""
 
-for stream in "${TRY_CUDA_STREAMS[@]}"; do
-  export PIP_INDEX_URL="https://download.pytorch.org/whl/${stream}"
-  export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
-  say "Trying $stream ..."
-  # Build install command with optional triton pin
-  install_cmd=(python -m pip install --no-cache-dir --force-reinstall
-               "torch==${TORCH_VER}" "torchvision==${VISION_VER}" "torchaudio==${AUDIO_VER}")
-  if [[ -n "${TRITON_VER:-}" ]]; then
-    install_cmd+=("triton==${TRITON_VER}")
-  fi
-  if "${install_cmd[@]}"; then
-    CUDA_PICKED="$stream"
-    PYTORCH_OK=1
-    break
-  fi
+# Try GPU streams with version pairs
+for pair in "${TORCH_PAIRS[@]}"; do
+  TORCH_VER="${pair%% *}"
+  VISION_VER="${pair##* }"
+  for stream in "${TRY_CUDA_STREAMS[@]}"; do
+    export PIP_INDEX_URL="https://download.pytorch.org/whl/${stream}"
+    export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
+    say "Trying torch==${TORCH_VER}, torchvision==${VISION_VER} on ${stream} ..."
+    install_cmd=(python -m pip install --no-cache-dir --force-reinstall
+                 "torch==${TORCH_VER}" "torchvision==${VISION_VER}" "torchaudio==${AUDIO_VER}")
+    if [[ -n "${TRITON_VER:-}" ]]; then install_cmd+=("triton==${TRITON_VER}"); fi
+    if "${install_cmd[@]}"; then
+      CUDA_PICKED="$stream"
+      PYTORCH_OK=1
+      break 2
+    fi
+  done
 done
 
+# If all CUDA streams failed, try CPU wheels with the same version pairs
 if [[ $PYTORCH_OK -ne 1 ]]; then
   warn "CUDA wheels failed; trying CPU-only wheels..."
   export PIP_INDEX_URL="https://download.pytorch.org/whl/cpu"
   export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
-  install_cmd=(python -m pip install --no-cache-dir --force-reinstall
-               "torch==${TORCH_VER}" "torchvision==${VISION_VER}" "torchaudio==${AUDIO_VER}")
-  if [[ -n "${TRITON_VER:-}" ]]; then
-    install_cmd+=("triton==${TRITON_VER}")
-  fi
-  if ! "${install_cmd[@]}"; then
-    err "Could not install PyTorch stack."
-    exit 1
-  fi
-  CUDA_PICKED="cpu"
+  for pair in "${TORCH_PAIRS[@]}"; do
+    TORCH_VER="${pair%% *}"
+    VISION_VER="${pair##* }"
+    say "Trying torch==${TORCH_VER}, torchvision==${VISION_VER} on CPU ..."
+    install_cmd=(python -m pip install --no-cache-dir --force-reinstall
+                 "torch==${TORCH_VER}" "torchvision==${VISION_VER}" "torchaudio==${AUDIO_VER}")
+    if [[ -n "${TRITON_VER:-}" ]]; then install_cmd+=("triton==${TRITON_VER}"); fi
+    if "${install_cmd[@]}"; then
+      CUDA_PICKED="cpu"
+      PYTORCH_OK=1
+      break
+    fi
+  done
+fi
+
+if [[ $PYTORCH_OK -ne 1 ]]; then
+  err "Could not install PyTorch stack."
+  exit 1
 fi
 say "PyTorch install target: ${CUDA_PICKED}"
 
