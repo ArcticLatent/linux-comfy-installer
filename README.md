@@ -49,7 +49,7 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 ### Clone and run manually
 
 ```bash
-git clone https://github.com/burceboran/linux-comfy-installer.git
+git clone https://github.com/ArcticLatent/linux-comfy-installer.git
 cd linux-comfy-installer
 chmod +x install-comfy.sh
 ./install-comfy.sh
@@ -58,7 +58,7 @@ chmod +x install-comfy.sh
 ### Or run directly via curl
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/burceboran/linux-comfy-installer/main/install-comfy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install-comfy.sh | bash
 ```
 
 The script will:
