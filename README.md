@@ -126,7 +126,7 @@ If needed, remove the alias manually from your shell config.
 
 ## 🖼️ Demo Preview
 
-![ComfyUI Installer Preview](https://raw.githubusercontent.com/burceboran/linux-comfy-installer/main/assets/demo.png)
+![ComfyUI Installer Preview](https://raw.githubusercontent.com/arcticlatent/linux-comfy-installer/main/assets/demo.png)
 
 ---
 
