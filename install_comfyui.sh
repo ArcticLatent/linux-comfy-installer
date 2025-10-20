@@ -166,7 +166,7 @@ if [[ ! "$READY" =~ ^[Yy]$ ]]; then
   exit 0
 fi
 
-# =================== Select Torch/CUDA by GPU tier =================
+# =================== Select Torch/CUDA by GPU tier ================
 # Defaults can still be overridden by env (TORCH_VER, etc.)
 if [[ "${GPU_TIER}" == "2" ]]; then
   # NVIDIA 3000 and below → PyTorch 2.7.1 + CUDA 12.1 path
