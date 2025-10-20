@@ -126,11 +126,8 @@ If needed, remove the alias manually from your shell config.
 
 ## 🖼️ Demo Preview
 
-*(You can add this later!)*  
-When you have a screenshot of your installer running in the terminal, upload it to your repo and embed it here like this:
-
 ```markdown
-![ComfyUI Installer Preview](assets/demo.png)
+![ComfyUI Installer Preview](https://raw.githubusercontent.com/burceboran/linux-comfy-installer/main/assets/demo.png)
 ```
 
 ---
