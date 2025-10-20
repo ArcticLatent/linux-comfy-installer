@@ -166,17 +166,25 @@ if [[ ! "$READY" =~ ^[Yy]$ ]]; then
   exit 0
 fi
 
+# =================== Select Torch/CUDA by GPU tier =================
+# Defaults can still be overridden by env (TORCH_VER, etc.)
+if [[ "${GPU_TIER}" == "2" ]]; then
+  # NVIDIA 3000 and below → PyTorch 2.7.1 + CUDA 12.1 path
+  TORCH_VER="${TORCH_VER:-2.7.1}"
+  VISION_VER="${VISION_VER:-0.22.0}"
+  AUDIO_VER="${AUDIO_VER:-2.7.1}"
+  TRITON_VER="${TRITON_VER:-}"         # let pip resolve a compatible triton for 2.7.1 (or omit)
+  TRY_CUDA_STREAMS=("cu121" "cu118")   # prefer cu121; fallback to cu118; CPU if both fail
+else
+  # NVIDIA 4000+ (your existing defaults)
+  TORCH_VER="${TORCH_VER:-2.8.0}"
+  VISION_VER="${VISION_VER:-0.23.0}"
+  AUDIO_VER="${AUDIO_VER:-2.8.0}"
+  TRITON_VER="${TRITON_VER:-3.4.0}"
+  TRY_CUDA_STREAMS=("cu128" "cu126" "cu124")
+fi
+
 # =================== PyTorch stack (native attention) =============
-# Per your preference: Torch 2.8.0 + cu128 (no xformers)
-TORCH_VER="${TORCH_VER:-2.8.0}"
-VISION_VER="${VISION_VER:-0.23.0}"
-AUDIO_VER="${AUDIO_VER:-2.8.0}"
-TRITON_VER="${TRITON_VER:-3.4.0}"
-
-TRY_CUDA_STREAMS=("cu128" "cu126" "cu124")
-PYTORCH_OK=0
-CUDA_PICKED=""
-
 say "Installing PyTorch ${TORCH_VER} (CUDA wheels), native attention (no xformers)..."
 
 # Clean slate so the resolver can't fight older remnants
@@ -190,13 +198,20 @@ pkgs = ["xformers","triton","torch","torchvision","torchaudio",
 subprocess.call([sys.executable,"-m","pip","uninstall","-y"]+pkgs)
 PY
 
+PYTORCH_OK=0
+CUDA_PICKED=""
+
 for stream in "${TRY_CUDA_STREAMS[@]}"; do
   export PIP_INDEX_URL="https://download.pytorch.org/whl/${stream}"
   export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
   say "Trying $stream ..."
-  if python -m pip install --no-cache-dir --force-reinstall \
-       "torch==${TORCH_VER}" "torchvision==${VISION_VER}" \
-       "torchaudio==${AUDIO_VER}" "triton==${TRITON_VER}"; then
+  # Build install command with optional triton pin
+  install_cmd=(python -m pip install --no-cache-dir --force-reinstall
+               "torch==${TORCH_VER}" "torchvision==${VISION_VER}" "torchaudio==${AUDIO_VER}")
+  if [[ -n "${TRITON_VER:-}" ]]; then
+    install_cmd+=("triton==${TRITON_VER}")
+  fi
+  if "${install_cmd[@]}"; then
     CUDA_PICKED="$stream"
     PYTORCH_OK=1
     break
@@ -207,9 +222,12 @@ if [[ $PYTORCH_OK -ne 1 ]]; then
   warn "CUDA wheels failed; trying CPU-only wheels..."
   export PIP_INDEX_URL="https://download.pytorch.org/whl/cpu"
   export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
-  if ! python -m pip install --no-cache-dir --force-reinstall \
-       "torch==${TORCH_VER}" "torchvision==${VISION_VER}" \
-       "torchaudio==${AUDIO_VER}" "triton==${TRITON_VER}"; then
+  install_cmd=(python -m pip install --no-cache-dir --force-reinstall
+               "torch==${TORCH_VER}" "torchvision==${VISION_VER}" "torchaudio==${AUDIO_VER}")
+  if [[ -n "${TRITON_VER:-}" ]]; then
+    install_cmd+=("triton==${TRITON_VER}")
+  fi
+  if ! "${install_cmd[@]}"; then
     err "Could not install PyTorch stack."
     exit 1
   fi
@@ -219,12 +237,14 @@ say "PyTorch install target: ${CUDA_PICKED}"
 
 # ========== Install ComfyUI requirements (respect Torch pins) ==========
 PIN_FILE="$INSTALL_DIR/.torch-pins.txt"
-cat > "$PIN_FILE" <<PIN
-torch==${TORCH_VER}
-torchvision==${VISION_VER}
-torchaudio==${AUDIO_VER}
-triton==${TRITON_VER}
-PIN
+{
+  echo "torch==${TORCH_VER}"
+  echo "torchvision==${VISION_VER}"
+  echo "torchaudio==${AUDIO_VER}"
+  if [[ -n "${TRITON_VER:-}" ]]; then
+    echo "triton==${TRITON_VER}"
+  fi
+} > "$PIN_FILE"
 
 FIL_REQ="$INSTALL_DIR/.requirements.notorch.txt"
 # Strip any torch/vision/audio/xformers entries so pip won't change our pins
@@ -260,7 +280,11 @@ def v(m):
 print("torch      :", v("torch"))
 print("torchvision:", v("torchvision"))
 print("torchaudio :", v("torchaudio"))
-print("triton     :", v("triton"))
+try:
+    import triton  # noqa
+    print("triton     :", v("triton"))
+except Exception as e:
+    print("triton     :", f"not pinned ({e})")
 print("cuda.is_available:", torch.cuda.is_available())
 try:
     from torch.nn.functional import scaled_dot_product_attention
@@ -342,6 +366,5 @@ echo "       comfyui-venv       # activate venv only"
 echo "       comfyui-update     # git pull + reinstall deps (pins respected)"
 echo
 say "If you need CUDA-index for extra installs later:"
-echo "  export PIP_INDEX_URL=${PIP_INDEX_URL:-https://download.pytorch.org/whl/cu128}"
+echo "  export PIP_INDEX_URL=${PIP_INDEX_URL:-https://download.pytorch.org/whl/cu121}"
 echo "  export PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL:-https://pypi.org/simple}"
-

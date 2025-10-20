@@ -1,4 +1,4 @@
-# 🧊 Linux ComfyUI Installer  
+# 🧊 Linux ComfyUI Installer
 [![Shell Script](https://img.shields.io/badge/Shell-Bash%2FZsh%2FFish-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Fedora Supported](https://img.shields.io/badge/Fedora-41%2F42-blue?logo=fedora&logoColor=white)
@@ -15,12 +15,12 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 
 ## 🚀 Features
 
-- 🧠 **Distro-aware:** Detects and installs required packages for Fedora, Ubuntu, or Arch-based systems.  
-- ⚙️ **GPU detection:** Chooses the correct PyTorch + CUDA build depending on your GPU (3000-series or 4000/5000-series).  
-- 🐍 **Python isolation:** Uses **pyenv** to manage Python 3.12.6 safely without polluting your system.  
-- 🧩 **Dependencies handled:** Installs build tools, curl, git, ffmpeg, and all other required dev packages automatically.  
-- 🎮 **Native-attention setup:** Enables modern PyTorch attention optimizations (no xformers required).  
-- 💻 **Shell-aware aliases:** Creates a convenient `comfyui-start` alias for Bash, Zsh, and Fish users.  
+- 🧠 **Distro-aware:** Detects and installs required packages for Fedora, Ubuntu, or Arch-based systems.
+- ⚙️ **GPU detection:** Chooses the correct PyTorch + CUDA build depending on your GPU (3000-series or 4000/5000-series).
+- 🐍 **Python isolation:** Uses **pyenv** to manage Python 3.12.6 safely without polluting your system.
+- 🧩 **Dependencies handled:** Installs build tools, curl, git, ffmpeg, and all other required dev packages automatically.
+- 🎮 **Native-attention setup:** Enables modern PyTorch attention optimizations (no xformers required).
+- 💻 **Shell-aware aliases:** Creates a convenient `comfyui-start` alias for Bash, Zsh, and Fish users.
 - 🧼 **Re-runnable:** Safe to execute multiple times — it checks for existing installs and skips redundant steps.
 
 ---
@@ -37,10 +37,10 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 
 ## 🔧 Requirements
 
-- NVIDIA GPU (RTX 3000 series or newer recommended)  
-- CUDA 12.8 runtime drivers installed  
-- Internet connection (for PyTorch + ComfyUI clone)  
-- Bash, Zsh, or Fish shell  
+- NVIDIA GPU (RTX 3000 series or newer recommended)
+- CUDA 12.8 runtime drivers installed
+- Internet connection (for PyTorch + ComfyUI clone)
+- Bash, Zsh, or Fish shell
 
 ---
 
@@ -63,11 +63,11 @@ curl -fsSL https://raw.githubusercontent.com/burceboran/linux-comfy-installer/ma
 
 The script will:
 
-1. Ask for your Linux distribution.  
-2. Ask for your NVIDIA GPU generation.  
-3. Install all required dependencies.  
-4. Set up `pyenv` and Python 3.12.6.  
-5. Install ComfyUI inside a virtual environment.  
+1. Ask for your Linux distribution.
+2. Ask for your NVIDIA GPU generation.
+3. Install all required dependencies.
+4. Set up `pyenv` and Python 3.12.6.
+5. Install ComfyUI inside a virtual environment.
 6. Create a `comfyui-start` alias for your shell.
 
 ---
@@ -81,8 +81,8 @@ comfyui-start
 ```
 
 This will:
-- Activate the virtual environment  
-- Start ComfyUI with the correct PyTorch + CUDA stack  
+- Activate the virtual environment
+- Start ComfyUI with the correct PyTorch + CUDA stack
 
 To deactivate the environment at any time:
 
@@ -132,16 +132,15 @@ If needed, remove the alias manually from your shell config.
 
 ## 🧊 Author
 
-**Burce Boran**  
-🎥 Asset Supervisor / VFX Artist | 🐧 Arctic Latent  
+**Burce Boran**
+🎥 Asset Supervisor / VFX Artist | 🐧 Arctic Latent
 
-Follow my AI + Linux VFX workflows on  
+Follow my AI + Linux VFX workflows on
 🔗 [YouTube – Arctic Latent](https://youtube.com/@ArcticLatent)
 
 ---
 
 ## 🪪 License
 
-MIT License © 2025 Burce Boran  
+MIT License © 2025 Burce Boran
 You’re free to modify and redistribute — just credit the original source.
-
