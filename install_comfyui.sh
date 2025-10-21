@@ -74,7 +74,8 @@ elif [[ "$OS_NAME" == "ubuntu" ]]; then
   sudo apt-get update
   sudo apt-get install -y build-essential git curl ffmpeg make cmake \
     libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev tk-dev \
-    libffi-dev xz-utils ca-certificates pkg-config
+    libffi-dev xz-utils ca-certificates pkg-config \
+    liblzma-dev libgdbm-dev libnss3-dev libncursesw5-dev
 
 elif [[ "$OS_NAME" == "arch" ]]; then
   sudo pacman -Syu --noconfirm
