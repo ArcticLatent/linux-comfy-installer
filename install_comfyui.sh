@@ -62,8 +62,30 @@ if [[ "$OS_NAME" == "fedora" ]]; then
   fi
   say "Using $PM on Fedora."
   # NOTE: NO zlib-devel (as requested)
-  sudo "$PM" -y install git curl ffmpeg make gcc gcc-c++ cmake \
-    openssl-devel bzip2-devel libffi-devel xz-devel readline-devel sqlite-devel tk-devel python3-devel
+
+  FEDORA_PKGS=(git curl make gcc gcc-c++ cmake
+    openssl-devel bzip2-devel libffi-devel xz-devel readline-devel sqlite-devel tk-devel python3-devel)
+
+  if rpm -q --quiet ffmpeg; then
+    say "Detected RPM Fusion ffmpeg already installed; skipping package add."
+  elif rpm -q --quiet ffmpeg-free; then
+    say "Detected Fedora ffmpeg-free already installed; skipping package add."
+  else
+    FFMPEG_CANDIDATE=""
+    if "$PM" list --available ffmpeg >/dev/null 2>&1; then
+      FFMPEG_CANDIDATE="ffmpeg"
+    elif "$PM" list --available ffmpeg-free >/dev/null 2>&1; then
+      FFMPEG_CANDIDATE="ffmpeg-free"
+    fi
+    if [[ -n "$FFMPEG_CANDIDATE" ]]; then
+      say "Queueing $FFMPEG_CANDIDATE for install."
+      FEDORA_PKGS+=("$FFMPEG_CANDIDATE")
+    else
+      warn "Could not find an ffmpeg package in enabled repositories; continuing without it."
+    fi
+  fi
+
+  sudo "$PM" -y install "${FEDORA_PKGS[@]}"
   # Ensure venv module exists for system python (pyenv will be used anyway)
   if ! python3 -c "import venv" 2>/dev/null; then
     warn "Python venv module missing; reinstalling python3..."
