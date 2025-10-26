@@ -34,6 +34,36 @@ confirm_choice() {
   done
 }
 
+detect_os_family() {
+  if [[ ! -r /etc/os-release ]]; then
+    err "Unable to determine OS: /etc/os-release not found."
+    return 1
+  fi
+
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  local id="${ID,,}"
+  local id_like="${ID_LIKE:-}"
+  id_like="${id_like,,}"
+
+  case "$id" in
+    fedora|rhel|centos|rocky|almalinux) echo "fedora"; return 0 ;;
+    ubuntu|pop|linuxmint|elementary|zorin|neon) echo "ubuntu"; return 0 ;;
+    arch|manjaro|endeavouros|garuda|arco|artix) echo "arch"; return 0 ;;
+  esac
+
+  for token in $id_like; do
+    case "$token" in
+      fedora|rhel|centos) echo "fedora"; return 0 ;;
+      ubuntu|debian) echo "ubuntu"; return 0 ;;
+      arch) echo "arch"; return 0 ;;
+    esac
+  done
+
+  err "Unsupported or unrecognized Linux distribution (ID=$id, ID_LIKE=$id_like)."
+  return 1
+}
+
 # ============================ choose OS ============================
 say "Which Linux distribution are you using?"
 echo "  1) Fedora"
@@ -46,7 +76,21 @@ case "$OS_CHOICE" in
   2) OS_NAME="ubuntu" ;;
   3) OS_NAME="arch" ;;
 esac
-say "Detected OS: $OS_NAME"
+say "Selected OS: $OS_NAME"
+
+if ! DETECTED_OS="$(detect_os_family)"; then
+  err "Automatic OS verification failed. This installer currently supports Fedora, Ubuntu, and Arch-based distributions."
+  exit 1
+fi
+
+say "Detected OS: $DETECTED_OS"
+
+if [[ "$DETECTED_OS" != "$OS_NAME" ]]; then
+  err "Installer option '$OS_NAME' does not match detected system '$DETECTED_OS'. Please rerun and select the correct distribution."
+  exit 1
+fi
+
+say "OS verification passed."
 
 # ======================== choose GPU tier =========================
 say "What NVIDIA GPU series are you using?"
