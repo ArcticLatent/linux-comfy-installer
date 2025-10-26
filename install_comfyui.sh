@@ -9,6 +9,17 @@ ask()  { printf "\033[1;36m[?   ]\033[0m %s " "$*"; }
 
 need_cmd() { command -v "$1" >/dev/null 2>&1 || { err "Missing required command: $1"; return 1; }; }
 
+append_line_if_missing() {
+  local file="$1" line="$2"
+  [[ -f "$file" ]] || touch "$file"
+  if ! grep -Fqx "$line" "$file" 2>/dev/null; then
+    {
+      echo ""
+      echo "$line"
+    } >> "$file"
+  fi
+}
+
 confirm_choice() {
   local prompt="$1" choices="$2" varname="$3" choice
   while true; do
@@ -49,6 +60,20 @@ case "$GPU_TIER" in
 esac
 say "GPU tier: $GPU_LABEL"
 
+say "SageAttention compatibility:"
+echo "  - RTX 40xx and 50xx: Fully supported with the latest software."
+echo "  - RTX 30xx        : Fully supported."
+echo "  - RTX 20xx and older: Limited compatibility; older drivers/software may be required."
+ask "Would you like to compile and install SageAttention 2.2.0? (y/n):"
+read -r INSTALL_SAGE_CHOICE
+if [[ "$INSTALL_SAGE_CHOICE" =~ ^[Yy]$ ]]; then
+  INSTALL_SAGE_ATTENTION=1
+  say "SageAttention installation enabled."
+else
+  INSTALL_SAGE_ATTENTION=0
+  say "Skipping SageAttention installation."
+fi
+
 # ===================== dev tools per distro =======================
 say "Installing development tool packages for $OS_NAME ..."
 need_cmd sudo
@@ -69,7 +94,8 @@ if [[ "$OS_NAME" == "fedora" ]]; then
   if rpm -q --quiet ffmpeg; then
     say "Detected RPM Fusion ffmpeg already installed; skipping package add."
   elif rpm -q --quiet ffmpeg-free; then
-    say "Detected Fedora ffmpeg-free already installed; skipping package add."
+    say "Detected Fedora ffmpeg-free already installed; swapping to ffmpeg..."
+    sudo "$PM" swap -y ffmpeg-free ffmpeg --allowerasing
   else
     FFMPEG_CANDIDATE=""
     if "$PM" list --available ffmpeg >/dev/null 2>&1; then
@@ -117,19 +143,21 @@ fi
 PYENV_ROOT="${HOME}/.pyenv"
 PYTHON_VERSION="3.12.6"
 
-if ! command -v pyenv >/dev/null 2>&1; then
-  say "Installing pyenv..."
-  git clone https://github.com/pyenv/pyenv.git "$PYENV_ROOT"
-  # Add to bashrc & zshrc so future shells can see pyenv
-  {
-    echo ''
-    echo '# >>> pyenv >>>'
-    echo "export PYENV_ROOT=\"$PYENV_ROOT\""
-    echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"'
-    echo 'eval "$(pyenv init -)"'
-    echo '# <<< pyenv <<<'
-  } >> "$HOME/.bashrc"
-  if [[ -f "$HOME/.zshrc" ]]; then
+export PYENV_ROOT
+
+if [[ -d "$PYENV_ROOT/bin" ]]; then
+  export PATH="$PYENV_ROOT/bin:$PATH"
+fi
+
+if command -v pyenv >/dev/null 2>&1; then
+  say "pyenv already installed."
+else
+  if [[ -d "$PYENV_ROOT" ]]; then
+    say "Found existing pyenv directory; reusing it."
+  else
+    say "Installing pyenv..."
+    git clone https://github.com/pyenv/pyenv.git "$PYENV_ROOT"
+    # Add to bashrc & zshrc so future shells can see pyenv
     {
       echo ''
       echo '# >>> pyenv >>>'
@@ -137,17 +165,27 @@ if ! command -v pyenv >/dev/null 2>&1; then
       echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"'
       echo 'eval "$(pyenv init -)"'
       echo '# <<< pyenv <<<'
-    } >> "$HOME/.zshrc"
+    } >> "$HOME/.bashrc"
+    if [[ -f "$HOME/.zshrc" ]]; then
+      {
+        echo ''
+        echo '# >>> pyenv >>>'
+        echo "export PYENV_ROOT=\"$PYENV_ROOT\""
+        echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"'
+        echo 'eval "$(pyenv init -)"'
+        echo '# <<< pyenv <<<'
+      } >> "$HOME/.zshrc"
+    fi
   fi
-  export PYENV_ROOT
   export PATH="$PYENV_ROOT/bin:$PATH"
-  eval "$(pyenv init -)"
-else
-  say "pyenv already installed."
-  export PYENV_ROOT
-  export PATH="$PYENV_ROOT/bin:$PATH"
-  eval "$(pyenv init -)"
 fi
+
+if ! command -v pyenv >/dev/null 2>&1; then
+  err "pyenv binary not found even after setup. Please check your installation."
+  exit 1
+fi
+
+eval "$(pyenv init -)"
 
 # Build Python (retry once if needed)
 export CFLAGS="${CFLAGS:-} -O2"
@@ -163,27 +201,32 @@ fi
 
 # =================== Ask for ComfyUI install location =============
 DEFAULT_DIR="${HOME}/ComfyUI"
-ask "Enter install location for ComfyUI [default: $DEFAULT_DIR]:"
-read -r INSTALL_DIR
-INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
-# Expand leading ~ to $HOME
-INSTALL_DIR="${INSTALL_DIR/#\~/$HOME}"
+while true; do
+  ask "Enter install location for ComfyUI (absolute path, e.g. /home/${USER:-user}/ComfyUI) [default: $DEFAULT_DIR]:"
+  read -r INSTALL_DIR
+  INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_DIR}"
+  if [[ "$INSTALL_DIR" != /* ]]; then
+    warn "Please enter a full absolute path starting with '/'."
+    continue
+  fi
+  break
+done
 
 # Sanity checks & prepare parent directories
 if [[ -e "$INSTALL_DIR" && ! -d "$INSTALL_DIR" ]]; then
   err "Path exists and is not a directory: $INSTALL_DIR"
   exit 1
 fi
+if [[ -d "$INSTALL_DIR" && -d "$INSTALL_DIR/.git" ]]; then
+  warn "ComfyUI appears to already be installed at: $INSTALL_DIR"
+  warn "Please remove or rename the existing directory before rerunning this installer."
+  exit 0
+fi
 mkdir -p "$(dirname "$INSTALL_DIR")"
 
 # ======================= ComfyUI + venv ===========================
-if [[ ! -d "$INSTALL_DIR" || ! -d "$INSTALL_DIR/.git" ]]; then
-  say "Cloning ComfyUI into: $INSTALL_DIR"
-  git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$INSTALL_DIR"
-else
-  say "ComfyUI directory exists; pulling latest..."
-  git -C "$INSTALL_DIR" pull --ff-only || warn "git pull skipped."
-fi
+say "Cloning ComfyUI into: $INSTALL_DIR"
+git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$INSTALL_DIR"
 
 say "Creating Python virtual environment (pyenv $PYTHON_VERSION)..."
 pyenv local "$PYTHON_VERSION"
@@ -317,6 +360,61 @@ except ImportError:
     pass
 PY
 
+# ===================== Custom node bootstrap ======================
+say "Setting up ComfyUI custom nodes (Manager only)..."
+# shellcheck disable=SC1090
+source "$VENV_DIR/bin/activate"
+
+CUSTOM_NODES_DIR="$INSTALL_DIR/custom_nodes"
+mkdir -p "$CUSTOM_NODES_DIR"
+
+MANAGER_DIR="$CUSTOM_NODES_DIR/comfyui-manager"
+if [[ ! -d "$MANAGER_DIR/.git" ]]; then
+  say "Cloning ComfyUI-Manager into custom_nodes..."
+  git clone --depth=1 https://github.com/ltdrdata/ComfyUI-Manager "$MANAGER_DIR"
+else
+  say "ComfyUI-Manager already exists; pulling latest changes..."
+  git -C "$MANAGER_DIR" pull --ff-only || warn "ComfyUI-Manager update skipped."
+fi
+
+# ===================== SageAttention (optional) ===================
+if [[ "${INSTALL_SAGE_ATTENTION:-0}" -eq 1 ]]; then
+  SAGE_VERSION="2.2.0"
+  SAGE_WHEEL_URL="https://huggingface.co/Kijai/PrecompiledWheels/resolve/main/sageattention-${SAGE_VERSION}-cp312-cp312-linux_x86_64.whl"
+  say "Installing SageAttention ${SAGE_VERSION} precompiled wheel..."
+  if python -m pip install --upgrade "$SAGE_WHEEL_URL"; then
+    say "SageAttention ${SAGE_VERSION} installed successfully from precompiled wheel."
+    SAGE_FLAG=" --use-sage-attention"
+  else
+    warn "Failed to install SageAttention ${SAGE_VERSION} from precompiled wheel."
+    SAGE_FLAG=""
+  fi
+else
+  SAGE_FLAG=""
+fi
+
+# ====================== Modernize NVML binding ====================
+say "Replacing deprecated pynvml package with nvidia-ml-py..."
+python - <<'PY'
+import subprocess, sys
+try:
+    import importlib.metadata as metadata
+except ImportError:  # pragma: no cover
+    import importlib_metadata as metadata
+
+def have(dist: str) -> bool:
+    try:
+        metadata.version(dist)
+        return True
+    except metadata.PackageNotFoundError:
+        return False
+
+if have("pynvml"):
+    subprocess.check_call([sys.executable, "-m", "pip", "uninstall", "-y", "pynvml"])
+
+subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "nvidia-ml-py"])
+PY
+
 # ========================== Verify stack ==========================
 python - <<'PY'
 import importlib, torch
@@ -355,9 +453,8 @@ READONLY_UPDATE="PIP_INDEX_URL=${PIP_INDEX_URL} PIP_EXTRA_INDEX_URL=${PIP_EXTRA_
 pip install -r \"$FIL_REQ\" -c \"$PIN_FILE\" && pip install --upgrade pyyaml"
 
 COMFY_ALIAS_BASHZSH="
-alias comfyui-start='${ACTIVATE_CMD} && python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188'
+alias comfyui-start='${ACTIVATE_CMD} && python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188${SAGE_FLAG}'
 alias comfyui-venv='${ACTIVATE_CMD}'
-alias comfyui-update='git -C \"$INSTALL_DIR\" pull --ff-only && ${READONLY_UPDATE}'
 "
 
 if [[ "$USER_SHELL" == "bash" ]]; then
@@ -374,24 +471,35 @@ fi
 if [[ -n "$RC_FILE" ]]; then
   if [[ "$USER_SHELL" == "fish" ]]; then
     mkdir -p "$(dirname "$RC_FILE")"
-    {
-      echo ""
-      echo "# >>> ComfyUI aliases >>>"
-      echo "alias comfyui-start 'source $VENV_DIR/bin/activate.fish; python $INSTALL_DIR/main.py --listen 0.0.0.0 --port 8188'"
-      echo "alias comfyui-venv 'source $VENV_DIR/bin/activate.fish'"
-      echo "alias comfyui-update 'git -C $INSTALL_DIR pull --ff-only; env PIP_INDEX_URL=$PIP_INDEX_URL PIP_EXTRA_INDEX_URL=$PIP_EXTRA_INDEX_URL pip install -r $FIL_REQ -c $PIN_FILE; pip install --upgrade pyyaml'"
-      echo "# <<< ComfyUI aliases <<<"
-    } >> "$RC_FILE"
-  else
-    {
-      echo ""
-      echo "# >>> ComfyUI aliases >>>"
-      echo "$COMFY_ALIAS_BASHZSH"
-      echo "# <<< ComfyUI aliases <<<"
-    } >> "$RC_FILE"
   fi
-  say "Added ComfyUI aliases to $RC_FILE"
-  say "Reload your shell or run: source '$RC_FILE' to enable them."
+  if [[ -f "$RC_FILE" ]] && grep -Fq "alias comfyui-start" "$RC_FILE"; then
+    if [[ -n "$SAGE_FLAG" ]] && ! grep -Fq "--use-sage-attention" "$RC_FILE"; then
+      sed -i "s|--port 8188'|--port 8188${SAGE_FLAG}'|" "$RC_FILE"
+      say "Updated comfyui-start alias in $RC_FILE to enable SageAttention."
+    else
+      say "ComfyUI aliases already present in $RC_FILE; skipping."
+    fi
+  else
+    [[ -f "$RC_FILE" ]] || touch "$RC_FILE"
+    if [[ "$USER_SHELL" == "fish" ]]; then
+      {
+        echo ""
+        echo "# >>> ComfyUI aliases >>>"
+        echo "alias comfyui-start 'source $VENV_DIR/bin/activate.fish; python $INSTALL_DIR/main.py --listen 0.0.0.0 --port 8188${SAGE_FLAG}'"
+        echo "alias comfyui-venv 'source $VENV_DIR/bin/activate.fish'"
+        echo "# <<< ComfyUI aliases <<<"
+      } >> "$RC_FILE"
+    else
+      {
+        echo ""
+        echo "# >>> ComfyUI aliases >>>"
+        echo "$COMFY_ALIAS_BASHZSH"
+        echo "# <<< ComfyUI aliases <<<"
+      } >> "$RC_FILE"
+    fi
+    say "Added ComfyUI aliases to $RC_FILE"
+    say "Reload your shell or run: source '$RC_FILE' to enable them."
+  fi
 fi
 
 # ============================ finishing ===========================
@@ -409,8 +517,3 @@ echo "       python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188"
 echo "  2) Or use the new aliases (after reloading your shell):"
 echo "       comfyui-start      # activate venv + launch ComfyUI"
 echo "       comfyui-venv       # activate venv only"
-echo "       comfyui-update     # git pull + reinstall deps (pins respected)"
-echo
-say "If you need CUDA-index for extra installs later:"
-echo "  export PIP_INDEX_URL=${PIP_INDEX_URL:-https://download.pytorch.org/whl/cu121}"
-echo "  export PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL:-https://pypi.org/simple}"
