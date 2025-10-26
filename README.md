@@ -71,7 +71,7 @@ The script will:
 3. Offer to install the SageAttention 2.2.0 precompiled wheel (with hardware compatibility notes).
 4. Install all required dependencies.
 5. Set up `pyenv` and Python 3.12.6.
-6. Install ComfyUI inside a virtual environment.
+6. Install ComfyUI inside a virtual environment and add ComfyUI-Manager under `custom_nodes/`.
 7. Create/update `comfyui-start` and `comfyui-venv` aliases for your shell (and append `--use-sage-attention` automatically when installed).
 
 ---
@@ -115,17 +115,6 @@ rm -rf ~/ComfyUI ~/.pyenv
 ```
 
 If needed, remove the alias manually from your shell config.
-
----
-
-## 🧭 Troubleshooting
-
-| Issue | Cause | Fix |
-|--------|--------|-----|
-| `ComfyUI directory exists` warning | You already have a ComfyUI checkout | Remove/rename the existing folder, then rerun |
-| `torchvision requires torch==2.9.0` | PyTorch version mismatch | The script pins `torch==2.8.0+cu128` for stability |
-| `pyenv build failed` | Missing SSL/zlib dev packages | Automatically fixed by the script |
-| `alias not found` | Shell didn’t reload | Restart terminal or run `source ~/.bashrc` (or your shell config) |
 
 ---
 
