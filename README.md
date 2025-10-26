@@ -20,8 +20,11 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 - 🐍 **Python isolation:** Uses **pyenv** to manage Python 3.12.6 safely without polluting your system.
 - 🧩 **Dependencies handled:** Installs build tools, curl, git, ffmpeg, and all other required dev packages automatically.
 - 🎮 **Native-attention setup:** Enables modern PyTorch attention optimizations (no xformers required).
-- 💻 **Shell-aware aliases:** Creates a convenient `comfyui-start` alias for Bash, Zsh, and Fish users.
+- 🪄 **Optional SageAttention:** One prompt installs the precompiled SageAttention 2.2.0 wheel and updates launch aliases to pass `--use-sage-attention`.
+- 🧱 **Custom nodes bootstrap:** Drops in ComfyUI-Manager automatically so you have the essentials out of the box.
+- 💻 **Shell-aware aliases:** Creates/updates a `comfyui-start` alias for Bash, Zsh, and Fish (and a `comfyui-venv` helper).
 - 🧼 **Re-runnable:** Safe to execute multiple times — it checks for existing installs and skips redundant steps.
+- 🛡️ **Install guardrails:** Refuses to overwrite an existing `ComfyUI` checkout so you don’t clobber your current setup by mistake.
 
 ---
 
@@ -65,10 +68,11 @@ The script will:
 
 1. Ask for your Linux distribution.
 2. Ask for your NVIDIA GPU generation.
-3. Install all required dependencies.
-4. Set up `pyenv` and Python 3.12.6.
-5. Install ComfyUI inside a virtual environment.
-6. Create a `comfyui-start` alias for your shell.
+3. Offer to install the SageAttention 2.2.0 precompiled wheel (with hardware compatibility notes).
+4. Install all required dependencies.
+5. Set up `pyenv` and Python 3.12.6.
+6. Install ComfyUI inside a virtual environment.
+7. Create/update `comfyui-start` and `comfyui-venv` aliases for your shell (and append `--use-sage-attention` automatically when installed).
 
 ---
 
@@ -96,9 +100,9 @@ deactivate
 
 | Shell | Alias added | Location |
 |--------|--------------|-----------|
-| Bash | `comfyui-start` | `~/.bashrc` |
-| Zsh | `comfyui-start` | `~/.zshrc` |
-| Fish | `comfyui-start` | `~/.config/fish/config.fish` |
+| Bash | `comfyui-start`, `comfyui-venv` | `~/.bashrc` |
+| Zsh | `comfyui-start`, `comfyui-venv` | `~/.zshrc` |
+| Fish | `comfyui-start`, `comfyui-venv` | `~/.config/fish/config.fish` |
 
 ---
 
@@ -118,6 +122,7 @@ If needed, remove the alias manually from your shell config.
 
 | Issue | Cause | Fix |
 |--------|--------|-----|
+| `ComfyUI directory exists` warning | You already have a ComfyUI checkout | Remove/rename the existing folder, then rerun |
 | `torchvision requires torch==2.9.0` | PyTorch version mismatch | The script pins `torch==2.8.0+cu128` for stability |
 | `pyenv build failed` | Missing SSL/zlib dev packages | Automatically fixed by the script |
 | `alias not found` | Shell didn’t reload | Restart terminal or run `source ~/.bashrc` (or your shell config) |
