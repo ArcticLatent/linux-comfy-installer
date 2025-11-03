@@ -17,7 +17,7 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 ## 🚀 Features
 
 - 🧠 **Distro-aware:** Detects and installs required packages for Fedora, Ubuntu/Linux Mint, or Arch-based systems.
-- ⚙️ **GPU detection:** Chooses the correct PyTorch + CUDA build depending on your GPU (3000-series or 4000/5000-series).
+- ⚙️ **GPU detection:** Chooses the correct PyTorch + CUDA build depending on your GPU (3000-series or older / 4000/5000-series).
 - 🐍 **Python isolation:** Uses **pyenv** to manage Python 3.12.6 safely without polluting your system.
 - 🧩 **Dependencies handled:** Installs build tools, curl, git, ffmpeg, and all other required dev packages automatically.
 - 🎮 **Native-attention setup:** Enables modern PyTorch attention optimizations (no xformers required).
