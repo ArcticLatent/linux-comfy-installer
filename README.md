@@ -1,8 +1,8 @@
 # 🧊 Linux ComfyUI Installer
 [![Shell Script](https://img.shields.io/badge/Shell-Bash%2FZsh%2FFish-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Fedora Supported](https://img.shields.io/badge/Fedora-41%2F42-blue?logo=fedora&logoColor=white)
-![Ubuntu Supported](https://img.shields.io/badge/Ubuntu-22.04%2F24.04-E95420?logo=ubuntu&logoColor=white)
+![Fedora Supported](https://img.shields.io/badge/Fedora-41%2F42%2B-blue?logo=fedora&logoColor=white)
+![Ubuntu Supported](https://img.shields.io/badge/Ubuntu-22.04%2F24.04%2B-E95420?logo=ubuntu&logoColor=white)
 ![Linux Mint Supported](https://img.shields.io/badge/Linux%20Mint-22%2B-87CF3E?logo=linuxmint&logoColor=white)
 ![Arch Supported](https://img.shields.io/badge/Arch%20Linux-Endeavour%2FManjaro-1793D1?logo=arch-linux&logoColor=white)
 ![GPU Support](https://img.shields.io/badge/NVIDIA-RTX%202000%2F3000%2F4000%2F5000-%2376B900?logo=nvidia&logoColor=white)
