@@ -5,7 +5,7 @@
 ![Ubuntu Supported](https://img.shields.io/badge/Ubuntu-22.04%2F24.04-E95420?logo=ubuntu&logoColor=white)
 ![Linux Mint Supported](https://img.shields.io/badge/Linux%20Mint-22%2B-87CF3E?logo=linuxmint&logoColor=white)
 ![Arch Supported](https://img.shields.io/badge/Arch%20Linux-Endeavour%2FManjaro-1793D1?logo=arch-linux&logoColor=white)
-![GPU Support](https://img.shields.io/badge/NVIDIA-RTX%203000%2F4000%2F5000-%2376B900?logo=nvidia&logoColor=white)
+![GPU Support](https://img.shields.io/badge/NVIDIA-RTX%202000%2F3000%2F4000%2F5000-%2376B900?logo=nvidia&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12.6-3776AB?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.8.0%2Bcu128-EE4C2C?logo=pytorch&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-12.8-76B900?logo=nvidia&logoColor=white)
