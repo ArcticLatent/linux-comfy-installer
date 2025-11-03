@@ -67,7 +67,7 @@ detect_os_family() {
 # ============================ choose OS ============================
 say "Which Linux distribution are you using?"
 echo "  1) Fedora"
-echo "  2) Ubuntu (22.04/24.04+)"
+echo "  2) Ubuntu (22.04/24.04+) / Linux Mint 22+"
 echo "  3) Arch-based (Arch/Manjaro/Endeavour)"
 confirm_choice "Enter 1, 2, or 3:" "1 2 3" OS_CHOICE
 
@@ -79,7 +79,7 @@ esac
 say "Selected OS: $OS_NAME"
 
 if ! DETECTED_OS="$(detect_os_family)"; then
-  err "Automatic OS verification failed. This installer currently supports Fedora, Ubuntu, and Arch-based distributions."
+  err "Automatic OS verification failed. This installer currently supports Fedora, Ubuntu/Linux Mint, and Arch-based distributions."
   exit 1
 fi
 
@@ -108,7 +108,7 @@ say "SageAttention compatibility:"
 echo "  - RTX 40xx and 50xx: Fully supported with the latest software."
 echo "  - RTX 30xx        : Fully supported."
 echo "  - RTX 20xx and older: Limited compatibility; older drivers/software may be required."
-ask "Would you like to compile and install SageAttention 2.2.0? (y/n):"
+ask "Would you like to install SageAttention 2.2.0? (y/n):"
 read -r INSTALL_SAGE_CHOICE
 if [[ "$INSTALL_SAGE_CHOICE" =~ ^[Yy]$ ]]; then
   INSTALL_SAGE_ATTENTION=1

@@ -3,19 +3,20 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Fedora Supported](https://img.shields.io/badge/Fedora-41%2F42-blue?logo=fedora&logoColor=white)
 ![Ubuntu Supported](https://img.shields.io/badge/Ubuntu-22.04%2F24.04-E95420?logo=ubuntu&logoColor=white)
+![Linux Mint Supported](https://img.shields.io/badge/Linux%20Mint-22%2B-87CF3E?logo=linuxmint&logoColor=white)
 ![Arch Supported](https://img.shields.io/badge/Arch%20Linux-Endeavour%2FManjaro-1793D1?logo=arch-linux&logoColor=white)
 ![GPU Support](https://img.shields.io/badge/NVIDIA-RTX%203000%2F4000%2F5000-%2376B900?logo=nvidia&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12.6-3776AB?logo=python&logoColor=white)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.8.0%2Bcu128-EE4C2C?logo=pytorch&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-12.8-76B900?logo=nvidia&logoColor=white)
 
-A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyUI) that works seamlessly across **Fedora**, **Ubuntu**, and **Arch-based** Linux distributions — with automatic NVIDIA GPU detection, proper CUDA-compatible PyTorch install, and clean `pyenv` isolation.
+A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyUI) that works seamlessly across **Fedora**, **Ubuntu/Linux Mint**, and **Arch-based** Linux distributions — with automatic NVIDIA GPU detection, proper CUDA-compatible PyTorch install, and clean `pyenv` isolation.
 
 ---
 
 ## 🚀 Features
 
-- 🧠 **Distro-aware:** Detects and installs required packages for Fedora, Ubuntu, or Arch-based systems.
+- 🧠 **Distro-aware:** Detects and installs required packages for Fedora, Ubuntu/Linux Mint, or Arch-based systems.
 - ⚙️ **GPU detection:** Chooses the correct PyTorch + CUDA build depending on your GPU (3000-series or 4000/5000-series).
 - 🐍 **Python isolation:** Uses **pyenv** to manage Python 3.12.6 safely without polluting your system.
 - 🧩 **Dependencies handled:** Installs build tools, curl, git, ffmpeg, and all other required dev packages automatically.
@@ -33,7 +34,7 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 | Distro | Package manager | Tested on |
 |---------|-----------------|------------|
 | Fedora 41 / 42 | `dnf5` | ✅ |
-| Ubuntu 22.04 / 24.04 | `apt` | ✅ |
+| Ubuntu 22.04 / 24.04 / Linux Mint 22+ | `apt` | ✅ |
 | Arch / EndeavourOS / Manjaro | `pacman` | ✅ |
 
 ---
