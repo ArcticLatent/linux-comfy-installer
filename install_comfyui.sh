@@ -20,6 +20,46 @@ append_line_if_missing() {
   fi
 }
 
+ensure_pyenv_shell_config() {
+  local shell_type="$1" target="$2" pyenv_root="$3"
+  [[ -n "$target" ]] || return 0
+  if [[ "$shell_type" == "fish" ]]; then
+    mkdir -p "$(dirname "$target")"
+  fi
+  [[ -f "$target" ]] || touch "$target"
+
+  if grep -Fq '# >>> pyenv >>>' "$target"; then
+    return
+  fi
+
+  case "$shell_type" in
+    fish)
+      {
+        echo ''
+        echo '# >>> pyenv >>>'
+        printf 'set -gx PYENV_ROOT "%s"\n' "$pyenv_root"
+        echo 'if test -d "$PYENV_ROOT/bin"'
+        echo '  contains "$PYENV_ROOT/bin" $PATH; or set -gx PATH "$PYENV_ROOT/bin" $PATH'
+        echo 'end'
+        echo 'status --is-interactive; and . (pyenv init - | psub)'
+        echo '# <<< pyenv <<<'
+      } >> "$target"
+      say "Configured pyenv environment for fish in $target"
+      ;;
+    *)
+      {
+        echo ''
+        echo '# >>> pyenv >>>'
+        echo "export PYENV_ROOT=\"$pyenv_root\""
+        echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"'
+        echo 'eval "$(pyenv init -)"'
+        echo '# <<< pyenv <<<'
+      } >> "$target"
+      say "Configured pyenv environment for $shell_type in $target"
+      ;;
+  esac
+}
+
 confirm_choice() {
   local prompt="$1" choices="$2" varname="$3" choice
   while true; do
@@ -201,39 +241,18 @@ else
   else
     say "Installing pyenv..."
     git clone https://github.com/pyenv/pyenv.git "$PYENV_ROOT"
-    # Add to bashrc & zshrc so future shells can see pyenv
-    {
-      echo ''
-      echo '# >>> pyenv >>>'
-      echo "export PYENV_ROOT=\"$PYENV_ROOT\""
-      echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"'
-      echo 'eval "$(pyenv init -)"'
-      echo '# <<< pyenv <<<'
-    } >> "$HOME/.bashrc"
-    if [[ -f "$HOME/.zshrc" ]]; then
-      {
-        echo ''
-        echo '# >>> pyenv >>>'
-        echo "export PYENV_ROOT=\"$PYENV_ROOT\""
-        echo 'command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"'
-        echo 'eval "$(pyenv init -)"'
-        echo '# <<< pyenv <<<'
-      } >> "$HOME/.zshrc"
-    fi
-    FISH_CONFIG="$HOME/.config/fish/config.fish"
-    mkdir -p "$(dirname "$FISH_CONFIG")"
-    {
-      echo ''
-      echo '# >>> pyenv >>>'
-      echo 'set -gx PYENV_ROOT "$HOME/.pyenv"'
-      echo 'if test -d "$PYENV_ROOT/bin"'
-      echo '  contains "$PYENV_ROOT/bin" $PATH; or set -gx PATH "$PYENV_ROOT/bin" $PATH'
-      echo 'end'
-      echo 'status --is-interactive; and . (pyenv init - | psub)'
-      echo '# <<< pyenv <<<'
-    } >> "$FISH_CONFIG"
   fi
   export PATH="$PYENV_ROOT/bin:$PATH"
+fi
+
+ensure_pyenv_shell_config "bash" "$HOME/.bashrc" "$PYENV_ROOT"
+CURRENT_LOGIN_SHELL="$(basename "${SHELL:-bash}")"
+if [[ -f "$HOME/.zshrc" ]] || [[ "$CURRENT_LOGIN_SHELL" == "zsh" ]]; then
+  ensure_pyenv_shell_config "zsh" "$HOME/.zshrc" "$PYENV_ROOT"
+fi
+FISH_CONFIG_PATH="$HOME/.config/fish/config.fish"
+if [[ -f "$FISH_CONFIG_PATH" ]] || [[ "$CURRENT_LOGIN_SHELL" == "fish" ]]; then
+  ensure_pyenv_shell_config "fish" "$FISH_CONFIG_PATH" "$PYENV_ROOT"
 fi
 
 if ! command -v pyenv >/dev/null 2>&1; then
