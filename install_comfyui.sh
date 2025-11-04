@@ -588,7 +588,7 @@ if [[ "$USER_SHELL" == "fish" ]]; then
 else
   echo "       source \"$VENV_DIR/bin/activate\""
 fi
-echo "       python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188"
+echo "       python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188${SAGE_FLAG}"
 echo "  2) Or use the new aliases (after reloading your shell):"
 echo "       comfyui-start      # activate venv + launch ComfyUI"
 echo "       comfyui-venv       # activate venv only"
