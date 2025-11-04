@@ -220,6 +220,18 @@ else
         echo '# <<< pyenv <<<'
       } >> "$HOME/.zshrc"
     fi
+    FISH_CONFIG="$HOME/.config/fish/config.fish"
+    mkdir -p "$(dirname "$FISH_CONFIG")"
+    {
+      echo ''
+      echo '# >>> pyenv >>>'
+      echo 'set -gx PYENV_ROOT "$HOME/.pyenv"'
+      echo 'if test -d "$PYENV_ROOT/bin"'
+      echo '  contains "$PYENV_ROOT/bin" $PATH; or set -gx PATH "$PYENV_ROOT/bin" $PATH'
+      echo 'end'
+      echo 'status --is-interactive; and . (pyenv init - | psub)'
+      echo '# <<< pyenv <<<'
+    } >> "$FISH_CONFIG"
   fi
   export PATH="$PYENV_ROOT/bin:$PATH"
 fi
