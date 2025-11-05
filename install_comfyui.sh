@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_VERSION="1.0"
+SCRIPT_SOURCE_URL_DEFAULT="https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install_comfyui.sh"
+SCRIPT_SOURCE_URL="${LINUX_COMFY_INSTALLER_SOURCE:-$SCRIPT_SOURCE_URL_DEFAULT}"
+
 # ============================ helpers ============================
 say()  { printf "\033[1;32m[INFO]\033[0m %s\n" "$*"; }
 warn() { printf "\033[1;33m[WARN]\033[0m %s\n" "$*"; }
@@ -17,6 +21,139 @@ append_line_if_missing() {
       echo ""
       echo "$line"
     } >> "$file"
+  fi
+}
+
+print_usage() {
+  cat <<'EOF'
+Usage: install_comfyui.sh [--update] [--check-update] [--version]
+  --update        Download and apply the latest installer script, then restart.
+  --check-update  Check whether a newer version is available and report status.
+  --version       Print the current installer version.
+EOF
+}
+
+resolve_script_path() {
+  local script="$1" resolved=""
+  if command -v realpath >/dev/null 2>&1; then
+    resolved="$(realpath "$script" 2>/dev/null || true)"
+  elif command -v readlink >/dev/null 2>&1; then
+    resolved="$(readlink -f "$script" 2>/dev/null || true)"
+  fi
+
+  if [[ -n "$resolved" ]]; then
+    printf '%s\n' "$resolved"
+    return 0
+  fi
+
+  if [[ "$script" == */* ]]; then
+    (
+      cd "$(dirname "$script")" >/dev/null 2>&1 || return 1
+      printf '%s/%s\n' "$(pwd)" "$(basename "$script")"
+    )
+  else
+    printf '%s/%s\n' "$(pwd)" "$script"
+  fi
+}
+
+fetch_latest_version() {
+  local remote_contents="" version_line=""
+
+  if command -v curl >/dev/null 2>&1; then
+    if ! remote_contents="$(curl -fsSL "$SCRIPT_SOURCE_URL" 2>/dev/null)"; then
+      return 1
+    fi
+  elif command -v wget >/dev/null 2>&1; then
+    if ! remote_contents="$(wget -qO- "$SCRIPT_SOURCE_URL" 2>/dev/null)"; then
+      return 1
+    fi
+  else
+    warn "Cannot check for updates automatically because neither curl nor wget is available."
+    return 1
+  fi
+
+  version_line="$(printf '%s\n' "$remote_contents" | grep -m1 '^SCRIPT_VERSION=' || true)"
+  if [[ -z "$version_line" ]]; then
+    return 1
+  fi
+
+  version_line="${version_line#SCRIPT_VERSION=\"}"
+  version_line="${version_line%\"}"
+  printf '%s\n' "$version_line"
+}
+
+download_remote_script() {
+  local url="$1" dest="$2"
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$url" -o "$dest" 2>/dev/null || return 1
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$dest" "$url" 2>/dev/null || return 1
+  else
+    warn "Cannot download updates because neither curl nor wget is available."
+    return 1
+  fi
+}
+
+perform_self_update() {
+  local new_version="$1"
+  shift || true
+  local remaining_args=("$@")
+  local script_path temp_file
+
+  script_path="$(resolve_script_path "$0")" || script_path="$0"
+  if [[ -z "$script_path" ]]; then
+    err "Unable to resolve script path for self-update."
+    return 1
+  fi
+
+  if [[ ! -w "$script_path" ]]; then
+    err "Cannot self-update: insufficient permissions to modify $script_path."
+    return 1
+  fi
+
+  temp_file="$(mktemp "${TMPDIR:-/tmp}/install_comfyui.sh.XXXXXX")" || {
+    err "Unable to create temporary file for update."
+    return 1
+  }
+
+  if ! download_remote_script "$SCRIPT_SOURCE_URL" "$temp_file"; then
+    rm -f "$temp_file"
+    err "Failed to download latest installer from $SCRIPT_SOURCE_URL."
+    return 1
+  fi
+
+  chmod +x "$temp_file" 2>/dev/null || true
+  if mv "$temp_file" "$script_path"; then
+    say "Installer updated to version ${new_version:-unknown}."
+    exec "$script_path" "${remaining_args[@]}"
+  else
+    err "Failed to replace existing installer at $script_path."
+    rm -f "$temp_file"
+    return 1
+  fi
+}
+
+check_for_updates() {
+  local remote_version=""
+
+  remote_version="$(fetch_latest_version)" || return 0
+  if [[ -z "$remote_version" || "$remote_version" == "$SCRIPT_VERSION" ]]; then
+    return 0
+  fi
+
+  warn "A new installer version is available ($SCRIPT_VERSION -> $remote_version)."
+  ask "Would you like to update now? (y/n):"
+  if ! read -r update_choice; then
+    warn "No response received; continuing with installer version $SCRIPT_VERSION."
+    return 0
+  fi
+  if [[ "$update_choice" =~ ^[Yy]$ ]]; then
+    if ! perform_self_update "$remote_version" "$@"; then
+      warn "Self-update failed; continuing with current version $SCRIPT_VERSION."
+    fi
+  else
+    say "Continuing with installer version $SCRIPT_VERSION."
   fi
 }
 
@@ -275,6 +412,85 @@ detect_os_family() {
   err "Unsupported or unrecognized Linux distribution (ID=$id, ID_LIKE=$id_like)."
   return 1
 }
+
+# ======================== argument handling =======================
+POSITIONAL_ARGS=()
+UPDATE_REQUESTED=0
+CHECK_UPDATE_ONLY=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --update)
+      UPDATE_REQUESTED=1
+      shift
+      ;;
+    --check-update)
+      CHECK_UPDATE_ONLY=1
+      shift
+      ;;
+    --version)
+      echo "$SCRIPT_VERSION"
+      exit 0
+      ;;
+    --help|-h)
+      print_usage
+      exit 0
+      ;;
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        POSITIONAL_ARGS+=("$1")
+        shift
+      done
+      break
+      ;;
+    -*)
+      err "Unknown option: $1"
+      print_usage
+      exit 1
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ ${#POSITIONAL_ARGS[@]} -gt 0 ]]; then
+  err "This installer does not accept positional arguments: ${POSITIONAL_ARGS[*]}"
+  print_usage
+  exit 1
+fi
+
+if [[ $UPDATE_REQUESTED -eq 1 ]]; then
+  if ! remote_version="$(fetch_latest_version)"; then
+    err "Unable to determine latest installer version."
+    exit 1
+  fi
+  if [[ "$remote_version" == "$SCRIPT_VERSION" ]]; then
+    say "Installer is already up to date (version $SCRIPT_VERSION)."
+    exit 0
+  fi
+  if ! perform_self_update "$remote_version"; then
+    exit 1
+  fi
+  exit 0
+fi
+
+if [[ $CHECK_UPDATE_ONLY -eq 1 ]]; then
+  if ! remote_version="$(fetch_latest_version)"; then
+    err "Unable to determine latest installer version."
+    exit 1
+  fi
+  if [[ "$remote_version" == "$SCRIPT_VERSION" ]]; then
+    say "Installer version $SCRIPT_VERSION is up to date."
+  else
+    warn "Installer update available: $SCRIPT_VERSION -> $remote_version"
+  fi
+  exit 0
+fi
+
+check_for_updates
 
 # ===================== primary action selection ====================
 RUN_FULL_INSTALL=0
