@@ -21,7 +21,7 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 - 🐍 **Python isolation:** Uses **pyenv** to manage Python 3.12.6 safely without polluting your system.
 - 🧩 **Dependencies handled:** Installs build tools, curl, git, ffmpeg, and all other required dev packages automatically.
 - 🎮 **Native-attention setup:** Enables modern PyTorch attention optimizations (no xformers required).
-- 🪄 **Optional SageAttention:** One prompt installs the precompiled SageAttention 2.2.0 wheel and updates launch aliases to pass `--use-sage-attention`.
+- 🪄 **Precompiled wheels menu:** Install SageAttention 2.2.0 with alias integration or drop InsightFace 0.7.3 into an existing ComfyUI — all from option 2 of the script.
 - 🧱 **Custom nodes bootstrap:** Drops in ComfyUI-Manager automatically so you have the essentials out of the box.
 - 💻 **Shell-aware aliases:** Creates/updates a `comfyui-start` alias for Bash, Zsh, and Fish (and a `comfyui-venv` helper).
 - 🧼 **Re-runnable:** Safe to execute multiple times — it checks for existing installs and skips redundant steps.
@@ -67,13 +67,18 @@ curl -fsSL https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/
 
 The script will:
 
-1. Ask for your Linux distribution.
-2. Ask for your NVIDIA GPU generation.
-3. Offer to install the SageAttention 2.2.0 precompiled wheel (with hardware compatibility notes).
-4. Install all required dependencies.
-5. Set up `pyenv` and Python 3.12.6.
-6. Install ComfyUI inside a virtual environment and add ComfyUI-Manager under `custom_nodes/`.
-7. Create/update `comfyui-start` and `comfyui-venv` aliases for your shell (and append `--use-sage-attention` automatically when installed).
+- Present a main menu so you can either install ComfyUI end-to-end or only add precompiled Linux wheels.
+- When you choose **Install ComfyUI**, it will:
+  1. Ask for your Linux distribution.
+  2. Ask for your NVIDIA GPU generation.
+  3. Offer to install the SageAttention 2.2.0 wheel (with hardware compatibility notes).
+  4. Install all required dependencies.
+  5. Set up `pyenv` and Python 3.12.6.
+  6. Install ComfyUI inside a virtual environment and add ComfyUI-Manager under `custom_nodes/`.
+  7. Create/update `comfyui-start` and `comfyui-venv` aliases for your shell (and append `--use-sage-attention` automatically when installed).
+- When you choose **Install precompiled wheels**, it will:
+  1. Confirm your existing ComfyUI directory (with venv).
+  2. Let you install SageAttention 2.2.0 (alias-aware) or InsightFace 0.7.3 directly into that environment.
 
 ---
 
@@ -94,6 +99,19 @@ To deactivate the environment at any time:
 ```bash
 deactivate
 ```
+
+---
+
+### Precompiled wheel installer
+
+Run the script again and pick option **2) Install precompiled wheels** to add extra packages to an existing ComfyUI setup. The installer will:
+
+- Validate the ComfyUI directory and virtual environment you point it to.
+- Offer the current catalog of Linux wheels:
+  - SageAttention 2.2.0 (adds `--use-sage-attention` to your aliases automatically)
+  - InsightFace 0.7.3
+
+More wheels can be added later — rerun the installer whenever you need to update or install additional ones.
 
 ---
 
