@@ -74,6 +74,178 @@ confirm_choice() {
   done
 }
 
+DEFAULT_COMFY_DIR="${HOME}/ComfyUI"
+
+prompt_existing_comfy_path() {
+  local result_name="$1"
+  local comfy_path
+  local default_dir="${DEFAULT_COMFY_DIR}"
+
+  if [[ -z "$result_name" ]]; then
+    err "prompt_existing_comfy_path requires a result variable name."
+    return 1
+  fi
+
+  local -n result_ref="$result_name"
+
+  while true; do
+    ask "Enter install location for ComfyUI (absolute path, e.g. /home/${USER:-user}/ComfyUI) [default: ${default_dir}]:"
+    read -r comfy_path
+    comfy_path="${comfy_path:-${default_dir}}"
+    if [[ "${comfy_path}" != /* ]]; then
+      warn "Please enter a full absolute path starting with '/'."
+      continue
+    fi
+    if [[ ! -d "${comfy_path}" ]]; then
+      warn "Directory not found: ${comfy_path}"
+      continue
+    fi
+    if [[ ! -x "${comfy_path}/venv/bin/python" ]]; then
+      warn "Missing virtual environment python binary at ${comfy_path}/venv/bin/python"
+      continue
+    fi
+    if [[ ! -f "${comfy_path}/main.py" ]]; then
+      warn "ComfyUI main.py not found in ${comfy_path}. Is this the correct directory?"
+      continue
+    fi
+    result_ref="${comfy_path}"
+    return 0
+  done
+}
+
+install_sageattention_into_comfy() {
+  local comfy_dir="$1"
+  local python_bin="${comfy_dir}/venv/bin/python"
+  local sage_version="2.2.0"
+  local sage_wheel_url="https://huggingface.co/arcticlatent/misc/resolve/main/sageattention-${sage_version}-cp312-cp312-linux_x86_64.whl"
+
+  say "Installing SageAttention ${sage_version} into ${comfy_dir}..."
+  if "${python_bin}" -m pip install --upgrade "${sage_wheel_url}"; then
+    say "SageAttention ${sage_version} installed successfully."
+    configure_comfy_aliases "${comfy_dir}" " --use-sage-attention"
+  else
+    err "Failed to install SageAttention ${sage_version} into ${comfy_dir}."
+    return 1
+  fi
+}
+
+install_insightface_into_comfy() {
+  local comfy_dir="$1"
+  local python_bin="${comfy_dir}/venv/bin/python"
+  local insight_version="0.7.3"
+  local insight_wheel_url="https://huggingface.co/arcticlatent/misc/resolve/main/insightface-${insight_version}-cp312-cp312-linux_x86_64.whl"
+
+  say "Installing InsightFace ${insight_version} into ${comfy_dir}..."
+  if "${python_bin}" -m pip install --upgrade "${insight_wheel_url}"; then
+    say "InsightFace ${insight_version} installed successfully."
+  else
+    err "Failed to install InsightFace ${insight_version} into ${comfy_dir}."
+    return 1
+  fi
+}
+
+configure_comfy_aliases() {
+  local install_dir="$1"
+  local sage_flag="${2:-}"
+  local venv_dir="${install_dir}/venv"
+  local user_shell rc_file start_alias venv_alias
+
+  user_shell=$(basename "${SHELL:-bash}")
+
+  if [[ "$user_shell" == "bash" ]]; then
+    rc_file="$HOME/.bashrc"
+  elif [[ "$user_shell" == "zsh" ]]; then
+    rc_file="$HOME/.zshrc"
+  elif [[ "$user_shell" == "fish" ]]; then
+    rc_file="$HOME/.config/fish/config.fish"
+  else
+    warn "Unknown shell type ($user_shell); skipping automatic alias setup."
+    return 0
+  fi
+
+  if [[ "$user_shell" == "fish" ]]; then
+    mkdir -p "$(dirname "$rc_file")"
+    start_alias="alias comfyui-start 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188${sage_flag}'"
+    venv_alias="alias comfyui-venv 'source ${venv_dir}/bin/activate.fish'"
+  else
+    start_alias="alias comfyui-start='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188${sage_flag}'"
+    venv_alias="alias comfyui-venv='source \"${venv_dir}/bin/activate\"'"
+  fi
+
+  [[ -f "$rc_file" ]] || touch "$rc_file"
+
+  if grep -Fq "alias comfyui-start" "$rc_file"; then
+    if [[ -n "$sage_flag" ]] && ! grep -Fq -- "--use-sage-attention" "$rc_file"; then
+      sed -i "s|--port 8188'|--port 8188${sage_flag}'|" "$rc_file"
+      say "Updated comfyui-start alias in $rc_file to enable SageAttention."
+    else
+      say "ComfyUI aliases already present in $rc_file; skipping."
+    fi
+    return 0
+  fi
+
+  {
+    echo ""
+    echo "# >>> ComfyUI aliases >>>"
+    if [[ "$user_shell" == "fish" ]]; then
+      echo "$start_alias"
+      echo "$venv_alias"
+    else
+      echo "$start_alias"
+      echo "$venv_alias"
+    fi
+    echo "# <<< ComfyUI aliases <<<"
+  } >> "$rc_file"
+
+  say "Added ComfyUI aliases to $rc_file"
+  say "Reload your shell or run: source '$rc_file' to enable them."
+}
+
+handle_precompiled_wheels_menu() {
+  local wheel_choice="" has_comfy="" install_choice="" comfy_dir=""
+
+  ask "Is ComfyUI already installed on this system? (y/n):"
+  read -r has_comfy
+  if [[ "${has_comfy}" =~ ^[Yy]$ ]]; then
+    if prompt_existing_comfy_path comfy_dir; then
+      say "Precompiled wheel options:"
+      echo "  1) Install SageAttention 2.2.0"
+      echo "  2) Install InsightFace 0.7.3"
+      confirm_choice "Enter 1 or 2:" "1 2" wheel_choice
+
+      case "${wheel_choice}" in
+        1)
+          if install_sageattention_into_comfy "${comfy_dir}"; then
+            say "Precompiled wheel installation finished."
+          else
+            err "Precompiled wheel installation failed."
+          fi
+          ;;
+        2)
+          if install_insightface_into_comfy "${comfy_dir}"; then
+            say "Precompiled wheel installation finished."
+          else
+            err "Precompiled wheel installation failed."
+          fi
+          ;;
+      esac
+    fi
+    return 0
+  fi
+
+  ask "Would you like to install ComfyUI now? (y/n):"
+  read -r install_choice
+  if [[ "${install_choice}" =~ ^[Yy]$ ]]; then
+    say "Continuing with full ComfyUI installation..."
+    RUN_FULL_INSTALL=1
+    return 0
+  fi
+
+  warn "Cannot install precompiled wheels without a ComfyUI installation."
+  say "Exiting without changes."
+  return 0
+}
+
 detect_os_family() {
   if [[ ! -r /etc/os-release ]]; then
     err "Unable to determine OS: /etc/os-release not found."
@@ -103,6 +275,27 @@ detect_os_family() {
   err "Unsupported or unrecognized Linux distribution (ID=$id, ID_LIKE=$id_like)."
   return 1
 }
+
+# ===================== primary action selection ====================
+RUN_FULL_INSTALL=0
+
+say "Choose what you would like to install:"
+echo "  1) Install ComfyUI"
+echo "  2) Install precompiled wheels"
+confirm_choice "Enter 1 or 2:" "1 2" PRIMARY_ACTION
+
+case "$PRIMARY_ACTION" in
+  1)
+    RUN_FULL_INSTALL=1
+    ;;
+  2)
+    handle_precompiled_wheels_menu
+    ;;
+esac
+
+if [[ "${RUN_FULL_INSTALL:-0}" -ne 1 ]]; then
+  exit 0
+fi
 
 # ============================ choose OS ============================
 say "Which Linux distribution are you using?"
@@ -148,7 +341,7 @@ say "SageAttention compatibility:"
 echo "  - RTX 40xx and 50xx: Fully supported with the latest software."
 echo "  - RTX 30xx        : Fully supported."
 echo "  - RTX 20xx and older: Limited compatibility; older drivers/software may be required."
-ask "Would you like to install SageAttention 2.2.0? (y/n):"
+ask "Would you like to install SageAttention 2.2.0? You can always install it later via the precompiled wheel installer option. (y/n):"
 read -r INSTALL_SAGE_CHOICE
 if [[ "$INSTALL_SAGE_CHOICE" =~ ^[Yy]$ ]]; then
   INSTALL_SAGE_ATTENTION=1
@@ -275,7 +468,7 @@ else
 fi
 
 # =================== Ask for ComfyUI install location =============
-DEFAULT_DIR="${HOME}/ComfyUI"
+DEFAULT_DIR="${DEFAULT_COMFY_DIR}"
 while true; do
   ask "Enter install location for ComfyUI (absolute path, e.g. /home/${USER:-user}/ComfyUI) [default: $DEFAULT_DIR]:"
   read -r INSTALL_DIR
@@ -455,7 +648,7 @@ fi
 # ===================== SageAttention (optional) ===================
 if [[ "${INSTALL_SAGE_ATTENTION:-0}" -eq 1 ]]; then
   SAGE_VERSION="2.2.0"
-  SAGE_WHEEL_URL="https://huggingface.co/Kijai/PrecompiledWheels/resolve/main/sageattention-${SAGE_VERSION}-cp312-cp312-linux_x86_64.whl"
+  SAGE_WHEEL_URL="https://huggingface.co/arcticlatent/misc/resolve/main/sageattention-${SAGE_VERSION}-cp312-cp312-linux_x86_64.whl"
   say "Installing SageAttention ${SAGE_VERSION} precompiled wheel..."
   if python -m pip install --upgrade "$SAGE_WHEEL_URL"; then
     say "SageAttention ${SAGE_VERSION} installed successfully from precompiled wheel."
@@ -514,74 +707,14 @@ PY
 
 # ====================== Shell alias setup =========================
 say "Setting up ComfyUI aliases for your shell..."
-
-USER_SHELL=$(basename "${SHELL:-bash}")  # fallback to bash if SHELL unset
-# For bash/zsh we can source activate; for fish we must source activate.fish
-if [[ "$USER_SHELL" == "fish" ]]; then
-  ACTIVATE_CMD="source \"$VENV_DIR/bin/activate.fish\""
-else
-  ACTIVATE_CMD="source \"$VENV_DIR/bin/activate\""
-fi
-
-# Safer update command: use our filtered requirements + pins and keep CUDA index
-READONLY_UPDATE="PIP_INDEX_URL=${PIP_INDEX_URL} PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL} \
-pip install -r \"$FIL_REQ\" -c \"$PIN_FILE\" && pip install --upgrade pyyaml"
-
-COMFY_ALIAS_BASHZSH="
-alias comfyui-start='${ACTIVATE_CMD} && python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188${SAGE_FLAG}'
-alias comfyui-venv='${ACTIVATE_CMD}'
-"
-
-if [[ "$USER_SHELL" == "bash" ]]; then
-  RC_FILE="$HOME/.bashrc"
-elif [[ "$USER_SHELL" == "zsh" ]]; then
-  RC_FILE="$HOME/.zshrc"
-elif [[ "$USER_SHELL" == "fish" ]]; then
-  RC_FILE="$HOME/.config/fish/config.fish"
-else
-  warn "Unknown shell type ($USER_SHELL); skipping automatic alias setup."
-  RC_FILE=""
-fi
-
-if [[ -n "$RC_FILE" ]]; then
-  if [[ "$USER_SHELL" == "fish" ]]; then
-    mkdir -p "$(dirname "$RC_FILE")"
-  fi
-  if [[ -f "$RC_FILE" ]] && grep -Fq "alias comfyui-start" "$RC_FILE"; then
-    if [[ -n "$SAGE_FLAG" ]] && ! grep -Fq "--use-sage-attention" "$RC_FILE"; then
-      sed -i "s|--port 8188'|--port 8188${SAGE_FLAG}'|" "$RC_FILE"
-      say "Updated comfyui-start alias in $RC_FILE to enable SageAttention."
-    else
-      say "ComfyUI aliases already present in $RC_FILE; skipping."
-    fi
-  else
-    [[ -f "$RC_FILE" ]] || touch "$RC_FILE"
-    if [[ "$USER_SHELL" == "fish" ]]; then
-      {
-        echo ""
-        echo "# >>> ComfyUI aliases >>>"
-        echo "alias comfyui-start 'source $VENV_DIR/bin/activate.fish; python $INSTALL_DIR/main.py --listen 0.0.0.0 --port 8188${SAGE_FLAG}'"
-        echo "alias comfyui-venv 'source $VENV_DIR/bin/activate.fish'"
-        echo "# <<< ComfyUI aliases <<<"
-      } >> "$RC_FILE"
-    else
-      {
-        echo ""
-        echo "# >>> ComfyUI aliases >>>"
-        echo "$COMFY_ALIAS_BASHZSH"
-        echo "# <<< ComfyUI aliases <<<"
-      } >> "$RC_FILE"
-    fi
-    say "Added ComfyUI aliases to $RC_FILE"
-    say "Reload your shell or run: source '$RC_FILE' to enable them."
-  fi
-fi
+configure_comfy_aliases "$INSTALL_DIR" "${SAGE_FLAG:-}"
 
 # ============================ finishing ===========================
 say "ComfyUI is ready."
 
 echo
 say "How to run:"
+USER_SHELL=$(basename "${SHELL:-bash}")
 echo "  1) Activate venv and start manually:"
 if [[ "$USER_SHELL" == "fish" ]]; then
   echo "       source \"$VENV_DIR/bin/activate.fish\""
