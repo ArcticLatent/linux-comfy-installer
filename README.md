@@ -115,6 +115,34 @@ More wheels can be added later — rerun the installer whenever you need to upda
 
 ---
 
+## 🔄 Keeping the Installer Updated
+
+The installer now ships with a self-update mechanism so you always get the latest fixes and wheel catalogue.
+
+- **Check for updates manually**
+  ```bash
+  ./install_comfyui.sh --check-update
+  ```
+  This compares your local `SCRIPT_VERSION` with the latest copy in the repo and lets you know whether an update is available.
+
+- **Update in place**
+  ```bash
+  ./install_comfyui.sh --update
+  ```
+  The script will download the newest version from GitHub, replace itself, and then restart with the same arguments.
+
+- **Automatic prompt**
+  When you launch `./install_comfyui.sh` normally, it checks the remote version first. If a newer release exists, you'll be prompted:
+  ```
+  [WARN] A new installer version is available (1.0 -> 1.1).
+  [?   ] Would you like to update now? (y/n):
+  ```
+  Choose `y` to upgrade on the spot or `n` to continue using your current copy.
+
+If you’re running from a read-only location or behind a strict firewall, you can set `LINUX_COMFY_INSTALLER_SOURCE` to point the updater at a mirror of `install_comfyui.sh`.
+
+---
+
 ## 🧩 Example alias summary
 
 | Shell | Alias added | Location |
