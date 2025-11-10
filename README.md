@@ -176,8 +176,8 @@ If needed, remove the alias manually from your shell config.
 **Burce Boran**
 🎥 Asset Supervisor / VFX Artist | 🐧 Arctic Latent
 
-Follow my AI + Linux VFX workflows on
-🔗 [YouTube – Arctic Latent](https://youtube.com/@ArcticLatent)
+🎥 [YouTube – Arctic Latent](https://youtube.com/@ArcticLatent)  
+🧡 [Patreon – Arctic Latent](https://patreon.com/ArcticLatent)
 
 ---
 
