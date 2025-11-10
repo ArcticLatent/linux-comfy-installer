@@ -173,11 +173,10 @@ If needed, remove the alias manually from your shell config.
 
 ## 🧊 Author
 
-**Burce Boran**
-🎥 Asset Supervisor / VFX Artist | 🐧 Arctic Latent
+Burce Boran 🎥 Asset Supervisor / VFX Artist | 🐧 Arctic Latent
 
-🎥 [YouTube – Arctic Latent](https://youtube.com/@ArcticLatent)  
-🧡 [Patreon – Arctic Latent](https://patreon.com/ArcticLatent)
+[![YouTube – Arctic Latent](https://img.shields.io/badge/YouTube-%40ArcticLatent-FF0000?logo=youtube&logoColor=white)](https://youtube.com/@ArcticLatent)
+[![Patreon – Arctic Latent](https://img.shields.io/badge/Patreon-Arctic%20Latent-FF424D?logo=patreon&logoColor=white)](https://patreon.com/ArcticLatent)
 
 ---
 
