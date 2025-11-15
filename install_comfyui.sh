@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="1.1"
+SCRIPT_VERSION="1.10"
 SCRIPT_SOURCE_URL_DEFAULT="https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install_comfyui.sh"
 SCRIPT_SOURCE_URL="${LINUX_COMFY_INSTALLER_SOURCE:-$SCRIPT_SOURCE_URL_DEFAULT}"
 
@@ -383,6 +383,423 @@ handle_precompiled_wheels_menu() {
   return 0
 }
 
+install_fluxgym_prereqs() {
+  local detected_os="" pkg_cmd=""
+
+  say "Detecting OS for Fluxgym prerequisites..."
+  if ! detected_os="$(detect_os_family)"; then
+    err "Fluxgym installer: unable to detect supported OS."
+    return 1
+  fi
+
+  case "$detected_os" in
+    arch)
+      need_cmd sudo
+      say "Installing Fluxgym build dependencies for Arch-based systems..."
+      sudo pacman -S --needed base-devel cmake pkgconf gcc-fortran openblas lapack
+      ;;
+    fedora)
+      need_cmd sudo
+      if command -v dnf5 >/dev/null 2>&1; then
+        pkg_cmd="dnf5"
+      else
+        pkg_cmd="dnf"
+      fi
+      say "Installing Fluxgym build dependencies for Fedora..."
+      sudo "$pkg_cmd" install -y gcc-gfortran openblas-devel lapack-devel cmake pkgconf
+      ;;
+    ubuntu)
+      need_cmd sudo
+      say "Installing Fluxgym build dependencies for Ubuntu/Linux Mint..."
+      sudo apt install -y build-essential gfortran \
+        libopenblas-dev liblapack-dev \
+        cmake pkg-config
+      ;;
+    *)
+      err "Fluxgym installer: unsupported OS family '$detected_os'."
+      return 1
+      ;;
+  esac
+
+  say "Fluxgym prerequisites installed."
+}
+
+ensure_fluxgym_pyenv() {
+  local pyenv_root="${HOME}/.pyenv"
+  local current_shell
+
+  if [[ -x "$pyenv_root/bin/pyenv" ]]; then
+    export PYENV_ROOT="$pyenv_root"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    say "pyenv already installed at $pyenv_root."
+    return 0
+  fi
+
+  if [[ -d "$pyenv_root" ]]; then
+    say "Found existing pyenv directory at $pyenv_root; ensuring binary presence..."
+  else
+    say "pyenv not found at $pyenv_root; installing..."
+    need_cmd git
+    git clone https://github.com/pyenv/pyenv.git "$pyenv_root"
+  fi
+
+  export PYENV_ROOT="$pyenv_root"
+  export PATH="$PYENV_ROOT/bin:$PATH"
+
+  current_shell="$(basename "${SHELL:-bash}")"
+  ensure_pyenv_shell_config "bash" "$HOME/.bashrc" "$PYENV_ROOT"
+  if [[ "$current_shell" == "zsh" ]] || [[ -f "$HOME/.zshrc" ]]; then
+    ensure_pyenv_shell_config "zsh" "$HOME/.zshrc" "$PYENV_ROOT"
+  fi
+  if [[ "$current_shell" == "fish" ]] || [[ -f "$HOME/.config/fish/config.fish" ]]; then
+    ensure_pyenv_shell_config "fish" "$HOME/.config/fish/config.fish" "$PYENV_ROOT"
+  fi
+
+  if command -v pyenv >/dev/null 2>&1; then
+    say "pyenv is ready for Fluxgym."
+    return 0
+  fi
+
+  err "pyenv setup failed. Please verify $pyenv_root/bin/pyenv exists."
+  return 1
+}
+
+FLUXGYM_DIR_DEFAULT="${HOME}/fluxgym"
+FLUXGYM_DIR=""
+
+prompt_fluxgym_install_dir() {
+  local input=""
+  local default_dir="${FLUXGYM_DIR_DEFAULT}"
+
+  while true; do
+    say "Enter install location for Fluxgym (absolute path). Press Enter to use ${default_dir}."
+    ask "Fluxgym directory [${default_dir}]:"
+    read -r input
+    input="${input:-$default_dir}"
+    if [[ "$input" != /* ]]; then
+      warn "Please provide an absolute path starting with '/'."
+      continue
+    fi
+    FLUXGYM_DIR="$input"
+    say "Fluxgym will be installed at: $FLUXGYM_DIR"
+    return 0
+  done
+}
+
+install_fluxgym_repos() {
+  local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
+  local sd_scripts_dir="${fluxgym_dir}/sd-scripts"
+
+  need_cmd git
+
+  say "Preparing Fluxgym repository under ${fluxgym_dir}..."
+  if [[ -d "${fluxgym_dir}/.git" ]]; then
+    say "Fluxgym repository already exists at ${fluxgym_dir}; updating..."
+    git -C "${fluxgym_dir}" pull --ff-only || warn "Fluxgym repository update skipped."
+  else
+    mkdir -p "$(dirname "$fluxgym_dir")"
+    git clone https://github.com/cocktailpeanut/fluxgym "${fluxgym_dir}"
+  fi
+
+  say "Ensuring sd-scripts (sd3 branch) is present under ${sd_scripts_dir}..."
+  if [[ -d "${sd_scripts_dir}/.git" ]]; then
+    git -C "${sd_scripts_dir}" fetch --all --tags || true
+    git -C "${sd_scripts_dir}" checkout sd3 || warn "sd-scripts sd3 checkout failed; please check manually."
+    git -C "${sd_scripts_dir}" pull --ff-only || warn "sd-scripts update skipped."
+  else
+    git clone -b sd3 https://github.com/kohya-ss/sd-scripts "${sd_scripts_dir}"
+  fi
+}
+
+install_fluxgym_python() {
+  local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
+  local target_python="3.11.10"
+
+  if [[ ! -d "$fluxgym_dir" ]]; then
+    err "Fluxgym directory not found at ${fluxgym_dir}; cannot set pyenv local."
+    return 1
+  fi
+  if ! command -v pyenv >/dev/null 2>&1; then
+    err "pyenv not available; cannot install Python ${target_python} for Fluxgym."
+    return 1
+  fi
+
+  say "Ensuring Python ${target_python} is installed via pyenv for Fluxgym..."
+  if ! pyenv versions --bare | grep -qx "${target_python}"; then
+    pyenv install -s "${target_python}"
+  fi
+
+  say "Setting local Python ${target_python} in ${fluxgym_dir}..."
+  (cd "${fluxgym_dir}" && pyenv local "${target_python}") || {
+    err "Failed to set pyenv local ${target_python} in ${fluxgym_dir}."
+    return 1
+  }
+}
+
+verify_fluxgym_python() {
+  local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
+  local expected="3.11.10"
+  local version_out=""
+
+  if [[ ! -d "$fluxgym_dir" ]]; then
+    err "Fluxgym directory not found at ${fluxgym_dir}; cannot verify Python version."
+    return 1
+  fi
+  if ! command -v pyenv >/dev/null 2>&1; then
+    err "pyenv not available; cannot verify Python version for Fluxgym."
+    return 1
+  fi
+
+  if ! version_out=$(
+    cd "$fluxgym_dir" && pyenv exec python --version 2>/dev/null
+  ); then
+    err "Failed to run python in ${fluxgym_dir} via pyenv."
+    return 1
+  fi
+
+  say "Fluxgym python version: ${version_out}"
+  if [[ "$version_out" != "Python ${expected}"* ]]; then
+    err "Unexpected Python version for Fluxgym (expected ${expected})."
+    return 1
+  fi
+}
+
+create_fluxgym_venv() {
+  local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
+
+  if [[ ! -d "$fluxgym_dir" ]]; then
+    err "Fluxgym directory not found at ${fluxgym_dir}; cannot create venv."
+    return 1
+  fi
+  if ! command -v pyenv >/dev/null 2>&1; then
+    err "pyenv not available; cannot create Fluxgym venv."
+    return 1
+  fi
+
+  if [[ -d "${fluxgym_dir}/env" ]]; then
+    say "Fluxgym virtual environment already exists at ${fluxgym_dir}/env; skipping creation."
+    return 0
+  fi
+
+  say "Creating Fluxgym virtual environment using pyenv's Python..."
+  if (cd "$fluxgym_dir" && pyenv exec python -m venv env); then
+    say "Fluxgym virtual environment created at ${fluxgym_dir}/env"
+    say "Activate with:"
+    echo "  bash/zsh: source ${fluxgym_dir}/env/bin/activate"
+    echo "  fish   : source ${fluxgym_dir}/env/bin/activate.fish"
+  else
+    err "Failed to create Fluxgym virtual environment."
+    return 1
+  fi
+}
+
+install_fluxgym_python_packages() {
+  local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
+  local venv_dir="${fluxgym_dir}/env"
+
+  if [[ ! -x "${venv_dir}/bin/python" ]]; then
+    err "Fluxgym venv not found at ${venv_dir}; cannot install packages."
+    return 1
+  fi
+
+  say "Installing Fluxgym Python packages inside venv..."
+  "${venv_dir}/bin/python" -m pip install --upgrade pip setuptools wheel
+  "${venv_dir}/bin/python" -m pip install --only-binary=:all: "numpy<2" "scipy>=1.11,<2"
+}
+
+install_fluxgym_sd_scripts_requirements() {
+  local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
+  local sd_scripts_dir="${fluxgym_dir}/sd-scripts"
+  local venv_python="${fluxgym_dir}/env/bin/python"
+
+  if [[ ! -x "$venv_python" ]]; then
+    err "Fluxgym venv python not found at $venv_python; cannot install sd-scripts requirements."
+    return 1
+  fi
+  if [[ ! -d "$sd_scripts_dir" ]]; then
+    err "sd-scripts directory not found at ${sd_scripts_dir}."
+    return 1
+  fi
+
+  say "Installing kohya sd-scripts requirements inside Fluxgym venv..."
+  (cd "$sd_scripts_dir" && "$venv_python" -m pip install -r requirements.txt)
+}
+
+install_fluxgym_requirements() {
+  local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
+  local venv_python="${fluxgym_dir}/env/bin/python"
+
+  if [[ ! -x "$venv_python" ]]; then
+    err "Fluxgym venv python not found at $venv_python; cannot install Fluxgym requirements."
+    return 1
+  fi
+  if [[ ! -d "$fluxgym_dir" ]]; then
+    err "Fluxgym directory not found at ${fluxgym_dir}."
+    return 1
+  fi
+
+  say "Installing Fluxgym requirements inside venv..."
+  (cd "$fluxgym_dir" && "$venv_python" -m pip install -r requirements.txt)
+}
+
+configure_fluxgym_aliases() {
+  local user_shell rc_file start_alias stop_alias
+  local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
+  local marker_start="# >>> Fluxgym aliases >>>"
+  local marker_end="# <<< Fluxgym aliases <<<"
+  user_shell=$(basename "${SHELL:-bash}")
+
+  case "$user_shell" in
+    bash) rc_file="$HOME/.bashrc" ;;
+    zsh)  rc_file="$HOME/.zshrc" ;;
+    fish)
+      rc_file="$HOME/.config/fish/config.fish"
+      mkdir -p "$(dirname "$rc_file")"
+      ;;
+    *)
+      warn "Unknown shell ($user_shell); skipping Fluxgym alias setup."
+      return 0
+      ;;
+  esac
+
+  [[ -f "$rc_file" ]] || touch "$rc_file"
+  if [[ "$user_shell" == "fish" ]]; then
+    start_alias="alias fluxgym-start 'cd \"$fluxgym_dir\"; and pyenv local 3.11.10; and source \"$fluxgym_dir/env/bin/activate.fish\"; and python app.py'"
+    stop_alias="alias fluxgym-stop 'deactivate'"
+  else
+    start_alias="alias fluxgym-start='cd \"$fluxgym_dir\" && pyenv local 3.11.10 && source \"$fluxgym_dir/env/bin/activate\" && python app.py'"
+    stop_alias="alias fluxgym-stop='deactivate'"
+  fi
+
+  if grep -Fq "alias fluxgym-start" "$rc_file"; then
+    if grep -Fq "$fluxgym_dir" "$rc_file" && grep -Fq "python app.py" "$rc_file"; then
+      say "Fluxgym aliases already present in $rc_file; skipping."
+      return 0
+    fi
+    say "Updating existing Fluxgym aliases in $rc_file to use $fluxgym_dir"
+    sed -i "/${marker_start}/,/${marker_end}/d" "$rc_file"
+  fi
+
+  # Clean up any empty alias blocks before writing
+  if grep -Fq "$marker_start" "$rc_file"; then
+    sed -i "/${marker_start}/,/${marker_end}/d" "$rc_file"
+  fi
+
+  {
+    echo ""
+    echo "$marker_start"
+    echo "$start_alias"
+    echo "$stop_alias"
+    echo "$marker_end"
+  } >> "$rc_file"
+
+  say "Added Fluxgym aliases to $rc_file"
+}
+
+detect_fluxgym_gpu_tier() {
+  local gpu_names="" tier=""
+
+  if command -v nvidia-smi >/dev/null 2>&1; then
+    gpu_names="$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | tr '\n' ' ' || true)"
+  fi
+
+  if [[ -n "$gpu_names" ]]; then
+    while read -r name; do
+      [[ -z "$name" ]] && continue
+      if [[ "$name" =~ ([0-9]{4}) ]]; then
+        local num="${BASH_REMATCH[1]}"
+        if (( num >= 4000 )); then
+          tier="4000_plus"
+          break
+        else
+          tier="3000_or_lower"
+        fi
+      fi
+    done <<< "$(printf '%s\n' "$gpu_names" | tr ',' '\n')"
+  fi
+
+  if [[ -z "$tier" ]]; then
+    say "Could not automatically determine GPU series."
+    echo "Select GPU tier for Fluxgym PyTorch install:"
+    echo "  1) NVIDIA 4000 series or newer (includes 5000)"
+    echo "  2) NVIDIA 3000 series or older"
+    confirm_choice "Enter 1 or 2:" "1 2" tier_choice
+    case "$tier_choice" in
+      1) tier="4000_plus" ;;
+      2) tier="3000_or_lower" ;;
+    esac
+  fi
+
+  printf '%s\n' "$tier"
+}
+
+install_fluxgym_torch_stack() {
+  local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
+  local venv_python="${fluxgym_dir}/env/bin/python"
+  local gpu_tier=""
+
+  if [[ ! -x "$venv_python" ]]; then
+    err "Fluxgym venv python not found at $venv_python; cannot install PyTorch stack."
+    return 1
+  fi
+
+  gpu_tier="$(detect_fluxgym_gpu_tier)"
+  if [[ -z "$gpu_tier" ]]; then
+    err "Unable to determine GPU tier for Fluxgym."
+    return 1
+  fi
+
+  case "$gpu_tier" in
+    3000_or_lower)
+      say "Installing PyTorch (cu121) for 3000-series or older GPUs..."
+      "$venv_python" -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+      ;;
+    4000_plus)
+      say "Installing PyTorch nightly (cu128) for 4000/5000-series GPUs..."
+      "$venv_python" -m pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
+      "$venv_python" -m pip install -U bitsandbytes
+      ;;
+    *)
+      err "Unknown GPU tier '$gpu_tier'; skipping PyTorch install."
+      return 1
+      ;;
+  esac
+}
+
+handle_lora_trainers_menu() {
+  local trainer_choice=""
+
+  say "LoRA trainer options:"
+  echo "  1) Install Fluxgym"
+  confirm_choice "Enter 1 to continue:" "1" trainer_choice
+
+  case "$trainer_choice" in
+    1)
+      if prompt_fluxgym_install_dir \
+        && install_fluxgym_prereqs \
+        && ensure_fluxgym_pyenv \
+        && install_fluxgym_repos \
+        && install_fluxgym_python \
+        && verify_fluxgym_python \
+        && create_fluxgym_venv \
+        && install_fluxgym_python_packages \
+        && install_fluxgym_sd_scripts_requirements \
+        && install_fluxgym_requirements \
+        && install_fluxgym_torch_stack; then
+        configure_fluxgym_aliases || warn "Fluxgym alias setup skipped."
+        say "Fluxgym install steps completed."
+        local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
+        echo "You can manage Fluxgym with:"
+        echo "  fluxgym-start  # activate venv in ${fluxgym_dir} and run python app.py"
+        echo "  fluxgym-stop   # deactivate venv"
+        echo "Fluxgym UI is available at http://localhost:7860"
+      else
+        err "Fluxgym prerequisites failed; aborting Fluxgym install."
+      fi
+      ;;
+  esac
+}
+
 detect_os_family() {
   if [[ ! -r /etc/os-release ]]; then
     err "Unable to determine OS: /etc/os-release not found."
@@ -498,7 +915,8 @@ RUN_FULL_INSTALL=0
 say "Choose what you would like to install:"
 echo "  1) Install ComfyUI"
 echo "  2) Install precompiled wheels"
-confirm_choice "Enter 1 or 2:" "1 2" PRIMARY_ACTION
+echo "  3) Install LoRA Trainers"
+confirm_choice "Enter 1, 2, or 3:" "1 2 3" PRIMARY_ACTION
 
 case "$PRIMARY_ACTION" in
   1)
@@ -506,6 +924,9 @@ case "$PRIMARY_ACTION" in
     ;;
   2)
     handle_precompiled_wheels_menu
+    ;;
+  3)
+    handle_lora_trainers_menu
     ;;
 esac
 
