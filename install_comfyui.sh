@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="1.10"
+SCRIPT_VERSION="1.11"
 SCRIPT_SOURCE_URL_DEFAULT="https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install_comfyui.sh"
 SCRIPT_SOURCE_URL="${LINUX_COMFY_INSTALLER_SOURCE:-$SCRIPT_SOURCE_URL_DEFAULT}"
 
@@ -259,7 +259,6 @@ install_sageattention_into_comfy() {
   say "Installing SageAttention ${sage_version} into ${comfy_dir}..."
   if "${python_bin}" -m pip install --upgrade "${sage_wheel_url}"; then
     say "SageAttention ${sage_version} installed successfully."
-    configure_comfy_aliases "${comfy_dir}" " --use-sage-attention"
   else
     err "Failed to install SageAttention ${sage_version} into ${comfy_dir}."
     return 1
@@ -283,9 +282,8 @@ install_insightface_into_comfy() {
 
 configure_comfy_aliases() {
   local install_dir="$1"
-  local sage_flag="${2:-}"
   local venv_dir="${install_dir}/venv"
-  local user_shell rc_file start_alias venv_alias
+  local user_shell rc_file start_alias start_sage_alias venv_alias
 
   user_shell=$(basename "${SHELL:-bash}")
 
@@ -302,35 +300,39 @@ configure_comfy_aliases() {
 
   if [[ "$user_shell" == "fish" ]]; then
     mkdir -p "$(dirname "$rc_file")"
-    start_alias="alias comfyui-start 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188${sage_flag}'"
+    start_alias="alias comfyui-start 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188'"
+    start_sage_alias="alias comfyui-start-sage 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188 --use-sage-attention'"
     venv_alias="alias comfyui-venv 'source ${venv_dir}/bin/activate.fish'"
   else
-    start_alias="alias comfyui-start='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188${sage_flag}'"
+    start_alias="alias comfyui-start='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188'"
+    start_sage_alias="alias comfyui-start-sage='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention'"
     venv_alias="alias comfyui-venv='source \"${venv_dir}/bin/activate\"'"
   fi
 
   [[ -f "$rc_file" ]] || touch "$rc_file"
 
-  if grep -Fq "alias comfyui-start" "$rc_file"; then
-    if [[ -n "$sage_flag" ]] && ! grep -Fq -- "--use-sage-attention" "$rc_file"; then
-      sed -i "s|--port 8188'|--port 8188${sage_flag}'|" "$rc_file"
-      say "Updated comfyui-start alias in $rc_file to enable SageAttention."
-    else
-      say "ComfyUI aliases already present in $rc_file; skipping."
-    fi
+  local -a new_aliases=()
+  if ! grep -Fq "alias comfyui-start" "$rc_file"; then
+    new_aliases+=("$start_alias")
+  fi
+  if ! grep -Fq "alias comfyui-start-sage" "$rc_file"; then
+    new_aliases+=("$start_sage_alias")
+  fi
+  if ! grep -Fq "alias comfyui-venv" "$rc_file"; then
+    new_aliases+=("$venv_alias")
+  fi
+
+  if [[ ${#new_aliases[@]} -eq 0 ]]; then
+    say "ComfyUI aliases already present in $rc_file; skipping."
     return 0
   fi
 
   {
     echo ""
     echo "# >>> ComfyUI aliases >>>"
-    if [[ "$user_shell" == "fish" ]]; then
-      echo "$start_alias"
-      echo "$venv_alias"
-    else
-      echo "$start_alias"
-      echo "$venv_alias"
-    fi
+    for alias_line in "${new_aliases[@]}"; do
+      echo "$alias_line"
+    done
     echo "# <<< ComfyUI aliases <<<"
   } >> "$rc_file"
 
@@ -974,20 +976,6 @@ case "$GPU_TIER" in
 esac
 say "GPU tier: $GPU_LABEL"
 
-say "SageAttention compatibility:"
-echo "  - RTX 40xx and 50xx: Fully supported with the latest software."
-echo "  - RTX 30xx        : Fully supported."
-echo "  - RTX 20xx and older: Limited compatibility; older drivers/software may be required."
-ask "Would you like to install SageAttention 2.2.0? You can always install it later via the precompiled wheel installer option. (y/n):"
-read -r INSTALL_SAGE_CHOICE
-if [[ "$INSTALL_SAGE_CHOICE" =~ ^[Yy]$ ]]; then
-  INSTALL_SAGE_ATTENTION=1
-  say "SageAttention installation enabled."
-else
-  INSTALL_SAGE_ATTENTION=0
-  say "Skipping SageAttention installation."
-fi
-
 # ===================== dev tools per distro =======================
 say "Installing development tool packages for $OS_NAME ..."
 need_cmd sudo
@@ -1282,22 +1270,6 @@ else
   git -C "$MANAGER_DIR" pull --ff-only || warn "ComfyUI-Manager update skipped."
 fi
 
-# ===================== SageAttention (optional) ===================
-if [[ "${INSTALL_SAGE_ATTENTION:-0}" -eq 1 ]]; then
-  SAGE_VERSION="2.2.0"
-  SAGE_WHEEL_URL="https://huggingface.co/arcticlatent/misc/resolve/main/sageattention-${SAGE_VERSION}-cp312-cp312-linux_x86_64.whl"
-  say "Installing SageAttention ${SAGE_VERSION} precompiled wheel..."
-  if python -m pip install --upgrade "$SAGE_WHEEL_URL"; then
-    say "SageAttention ${SAGE_VERSION} installed successfully from precompiled wheel."
-    SAGE_FLAG=" --use-sage-attention"
-  else
-    warn "Failed to install SageAttention ${SAGE_VERSION} from precompiled wheel."
-    SAGE_FLAG=""
-  fi
-else
-  SAGE_FLAG=""
-fi
-
 # ====================== Modernize NVML binding ====================
 say "Replacing deprecated pynvml package with nvidia-ml-py..."
 python - <<'PY'
@@ -1344,7 +1316,7 @@ PY
 
 # ====================== Shell alias setup =========================
 say "Setting up ComfyUI aliases for your shell..."
-configure_comfy_aliases "$INSTALL_DIR" "${SAGE_FLAG:-}"
+configure_comfy_aliases "$INSTALL_DIR"
 
 # ============================ finishing ===========================
 say "ComfyUI is ready."
@@ -1358,7 +1330,9 @@ if [[ "$USER_SHELL" == "fish" ]]; then
 else
   echo "       source \"$VENV_DIR/bin/activate\""
 fi
-echo "       python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188${SAGE_FLAG}"
+echo "       python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188"
+echo "       python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention   # SageAttention"
 echo "  2) Or use the new aliases (after reloading your shell):"
-echo "       comfyui-start      # activate venv + launch ComfyUI"
-echo "       comfyui-venv       # activate venv only"
+echo "       comfyui-start        # activate venv + launch with native attention"
+echo "       comfyui-start-sage   # activate venv + launch with SageAttention"
+echo "       comfyui-venv         # activate venv only"
