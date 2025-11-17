@@ -282,8 +282,9 @@ install_insightface_into_comfy() {
 
 configure_comfy_aliases() {
   local install_dir="$1"
+  local include_sage="${2:-0}"
   local venv_dir="${install_dir}/venv"
-  local user_shell rc_file start_alias start_sage_alias venv_alias
+  local user_shell rc_file start_alias venv_alias start_sage_alias=""
 
   user_shell=$(basename "${SHELL:-bash}")
 
@@ -301,12 +302,16 @@ configure_comfy_aliases() {
   if [[ "$user_shell" == "fish" ]]; then
     mkdir -p "$(dirname "$rc_file")"
     start_alias="alias comfyui-start 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188'"
-    start_sage_alias="alias comfyui-start-sage 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188 --use-sage-attention'"
     venv_alias="alias comfyui-venv 'source ${venv_dir}/bin/activate.fish'"
+    if [[ "$include_sage" -eq 1 ]]; then
+      start_sage_alias="alias comfyui-start-sage 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188 --use-sage-attention'"
+    fi
   else
     start_alias="alias comfyui-start='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188'"
-    start_sage_alias="alias comfyui-start-sage='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention'"
     venv_alias="alias comfyui-venv='source \"${venv_dir}/bin/activate\"'"
+    if [[ "$include_sage" -eq 1 ]]; then
+      start_sage_alias="alias comfyui-start-sage='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention'"
+    fi
   fi
 
   [[ -f "$rc_file" ]] || touch "$rc_file"
@@ -315,7 +320,7 @@ configure_comfy_aliases() {
   if ! grep -Fq "alias comfyui-start" "$rc_file"; then
     new_aliases+=("$start_alias")
   fi
-  if ! grep -Fq "alias comfyui-start-sage" "$rc_file"; then
+  if [[ "$include_sage" -eq 1 && -n "$start_sage_alias" && ! grep -Fq "alias comfyui-start-sage" "$rc_file" ]]; then
     new_aliases+=("$start_sage_alias")
   fi
   if ! grep -Fq "alias comfyui-venv" "$rc_file"; then
@@ -355,6 +360,7 @@ handle_precompiled_wheels_menu() {
       case "${wheel_choice}" in
         1)
           if install_sageattention_into_comfy "${comfy_dir}"; then
+            configure_comfy_aliases "${comfy_dir}" 1
             say "Precompiled wheel installation finished."
           else
             err "Precompiled wheel installation failed."
@@ -1316,7 +1322,7 @@ PY
 
 # ====================== Shell alias setup =========================
 say "Setting up ComfyUI aliases for your shell..."
-configure_comfy_aliases "$INSTALL_DIR"
+configure_comfy_aliases "$INSTALL_DIR" 0
 
 # ============================ finishing ===========================
 say "ComfyUI is ready."
@@ -1331,8 +1337,6 @@ else
   echo "       source \"$VENV_DIR/bin/activate\""
 fi
 echo "       python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188"
-echo "       python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention   # SageAttention"
 echo "  2) Or use the new aliases (after reloading your shell):"
 echo "       comfyui-start        # activate venv + launch with native attention"
-echo "       comfyui-start-sage   # activate venv + launch with SageAttention"
 echo "       comfyui-venv         # activate venv only"
