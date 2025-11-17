@@ -1380,9 +1380,6 @@ USER_SHELL=$(basename "${SHELL:-bash}")
 ALIAS_START="${COMFY_ALIAS_START:-comfyui-start}"
 ALIAS_VENV="${COMFY_ALIAS_VENV:-comfyui-venv}"
 ALIAS_SAGE="${COMFY_ALIAS_SAGE:-}"
-if [[ -n "${COMFY_ALIAS_NOTE:-}" ]]; then
-  say "$COMFY_ALIAS_NOTE"
-fi
 echo "  1) Activate venv and start manually:"
 if [[ "$USER_SHELL" == "fish" ]]; then
   echo "       source \"$VENV_DIR/bin/activate.fish\""
