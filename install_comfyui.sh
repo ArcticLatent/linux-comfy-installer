@@ -285,6 +285,7 @@ configure_comfy_aliases() {
   local include_sage="${2:-0}"
   local venv_dir="${install_dir}/venv"
   local user_shell rc_file start_alias venv_alias start_sage_alias=""
+  local suffix="" max_suffix=0 has_alias_for_install=0 suffix_note=""
 
   user_shell=$(basename "${SHELL:-bash}")
 
@@ -299,31 +300,68 @@ configure_comfy_aliases() {
     return 0
   fi
 
+  if grep -Fq "$install_dir" "$rc_file"; then
+    has_alias_for_install=1
+  fi
+
+  while read -r existing_alias; do
+    local name part num
+    name="${existing_alias#alias }"
+    name="${name%%=*}"
+    part="${name#comfyui-start}"
+    if [[ -z "$part" ]]; then
+      num=1
+    elif [[ "$part" =~ ^[0-9]+$ ]]; then
+      num="$part"
+    else
+      continue
+    fi
+    if (( num > max_suffix )); then
+      max_suffix="$num"
+    fi
+  done < <(grep -E '^alias comfyui-start[0-9]*=' "$rc_file" || true)
+
+  if [[ "$has_alias_for_install" -eq 1 ]]; then
+    suffix=""
+  elif [[ "$max_suffix" -ge 1 ]]; then
+    suffix=$((max_suffix + 1))
+    suffix_note="Existing ComfyUI aliases point to a different install; creating numbered aliases for this install."
+  fi
+
+  local start_name="comfyui-start${suffix}"
+  local venv_name="comfyui-venv${suffix}"
+  local start_sage_name=""
+  if [[ "$include_sage" -eq 1 ]]; then
+    start_sage_name="comfyui-start-sage${suffix}"
+  fi
+
   if [[ "$user_shell" == "fish" ]]; then
     mkdir -p "$(dirname "$rc_file")"
-    start_alias="alias comfyui-start 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188'"
-    venv_alias="alias comfyui-venv 'source ${venv_dir}/bin/activate.fish'"
+    start_alias="alias ${start_name} 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188'"
+    venv_alias="alias ${venv_name} 'source ${venv_dir}/bin/activate.fish'"
     if [[ "$include_sage" -eq 1 ]]; then
-      start_sage_alias="alias comfyui-start-sage 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188 --use-sage-attention'"
+      start_sage_alias="alias ${start_sage_name} 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188 --use-sage-attention'"
     fi
   else
-    start_alias="alias comfyui-start='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188'"
-    venv_alias="alias comfyui-venv='source \"${venv_dir}/bin/activate\"'"
+    start_alias="alias ${start_name}='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188'"
+    venv_alias="alias ${venv_name}='source \"${venv_dir}/bin/activate\"'"
     if [[ "$include_sage" -eq 1 ]]; then
-      start_sage_alias="alias comfyui-start-sage='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention'"
+      start_sage_alias="alias ${start_sage_name}='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention'"
     fi
   fi
 
   [[ -f "$rc_file" ]] || touch "$rc_file"
 
   local -a new_aliases=()
-  if ! grep -Fq "alias comfyui-start" "$rc_file"; then
+  if ! grep -Fq "alias ${start_name}" "$rc_file"; then
     new_aliases+=("$start_alias")
   fi
-  if [[ "$include_sage" -eq 1 && -n "$start_sage_alias" && ! grep -Fq "alias comfyui-start-sage" "$rc_file" ]]; then
-    new_aliases+=("$start_sage_alias")
+  if [[ "$include_sage" -eq 1 && -n "$start_sage_alias" ]]; then
+    if ! grep -Fq "alias ${start_sage_name}" "$rc_file"; then
+      new_aliases+=("$start_sage_alias")
+    fi
   fi
-  if ! grep -Fq "alias comfyui-venv" "$rc_file"; then
+  if ! grep -Fq "alias ${venv_name}" "$rc_file"; then
     new_aliases+=("$venv_alias")
   fi
 
@@ -342,6 +380,10 @@ configure_comfy_aliases() {
   } >> "$rc_file"
 
   say "Added ComfyUI aliases to $rc_file"
+  if [[ -n "$suffix_note" ]]; then
+    say "$suffix_note"
+    say "New aliases: ${start_name}, ${venv_name}${start_sage_name:+, ${start_sage_name}}"
+  fi
   say "Reload your shell or run: source '$rc_file' to enable them."
 }
 
