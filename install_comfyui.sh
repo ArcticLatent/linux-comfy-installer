@@ -300,6 +300,8 @@ configure_comfy_aliases() {
     return 0
   fi
 
+  [[ -f "$rc_file" ]] || touch "$rc_file"
+
   if grep -Fq "$install_dir" "$rc_file"; then
     has_alias_for_install=1
   fi
@@ -307,7 +309,7 @@ configure_comfy_aliases() {
   while read -r existing_alias; do
     local name part num
     name="${existing_alias#alias }"
-    name="${name%%=*}"
+    name="${name%%[ =]*}"
     part="${name#comfyui-start}"
     if [[ -z "$part" ]]; then
       num=1
@@ -319,7 +321,7 @@ configure_comfy_aliases() {
     if (( num > max_suffix )); then
       max_suffix="$num"
     fi
-  done < <(grep -E '^alias comfyui-start[0-9]*=' "$rc_file" || true)
+  done < <(grep -E '^alias[[:space:]]+comfyui-start[0-9]*\b' "$rc_file" || true)
 
   if [[ "$has_alias_for_install" -eq 1 ]]; then
     suffix=""
@@ -349,8 +351,6 @@ configure_comfy_aliases() {
       start_sage_alias="alias ${start_sage_name}='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention'"
     fi
   fi
-
-  [[ -f "$rc_file" ]] || touch "$rc_file"
 
   local -a new_aliases=()
   if ! grep -Fq "alias ${start_name}" "$rc_file"; then
@@ -385,6 +385,11 @@ configure_comfy_aliases() {
     say "New aliases: ${start_name}, ${venv_name}${start_sage_name:+, ${start_sage_name}}"
   fi
   say "Reload your shell or run: source '$rc_file' to enable them."
+
+  COMFY_ALIAS_START="$start_name"
+  COMFY_ALIAS_VENV="$venv_name"
+  COMFY_ALIAS_SAGE="$start_sage_name"
+  COMFY_ALIAS_NOTE="$suffix_note"
 }
 
 handle_precompiled_wheels_menu() {
@@ -1372,6 +1377,12 @@ say "ComfyUI is ready."
 echo
 say "How to run:"
 USER_SHELL=$(basename "${SHELL:-bash}")
+ALIAS_START="${COMFY_ALIAS_START:-comfyui-start}"
+ALIAS_VENV="${COMFY_ALIAS_VENV:-comfyui-venv}"
+ALIAS_SAGE="${COMFY_ALIAS_SAGE:-}"
+if [[ -n "${COMFY_ALIAS_NOTE:-}" ]]; then
+  say "$COMFY_ALIAS_NOTE"
+fi
 echo "  1) Activate venv and start manually:"
 if [[ "$USER_SHELL" == "fish" ]]; then
   echo "       source \"$VENV_DIR/bin/activate.fish\""
@@ -1380,5 +1391,8 @@ else
 fi
 echo "       python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188"
 echo "  2) Or use the new aliases (after reloading your shell):"
-echo "       comfyui-start        # activate venv + launch with native attention"
-echo "       comfyui-venv         # activate venv only"
+echo "       ${ALIAS_START}        # activate venv + launch with native attention"
+if [[ -n "$ALIAS_SAGE" ]]; then
+  echo "       ${ALIAS_SAGE}   # activate venv + launch with SageAttention"
+fi
+echo "       ${ALIAS_VENV}         # activate venv only"
