@@ -17,15 +17,14 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 ## 🚀 Features
 
 - 🧠 **Distro-aware:** Detects and installs required packages for Fedora, Ubuntu/Linux Mint, or Arch-based systems.
-- ⚙️ **GPU detection:** Chooses the correct PyTorch + CUDA build depending on your GPU (3000-series or older / 4000/5000-series).
+- ⚙️ **Unified GPU stack:** Installs a single CUDA 12.8 stack (PyTorch 2.8.0 + cu128) that works on RTX 3000 / 4000 / 5000 series.
 - 🐍 **Python isolation:** Uses **pyenv** to manage Python 3.12.6 safely without polluting your system.
 - 🧩 **Dependencies handled:** Installs build tools, curl, git, ffmpeg, and all other required dev packages automatically.
-- 🎮 **Native-attention setup:** Enables modern PyTorch attention optimizations (no xformers required).
-- 🪄 **Precompiled wheels menu:** Install SageAttention 2.2.0 with alias integration or drop InsightFace 0.7.3 into an existing ComfyUI — all from option 2 of the script.
+- 🎮 **Two install modes:** Option 1 installs native PyTorch attention (no xformers); Option 2 installs the Accelerator stack (Torch 2.7.1 cu128 + xFormers/FlashAttention/SageAttention/Triton) using the bundled `assets/acceleritor_torch271cu128.txt`.
 - 🧱 **Custom nodes bootstrap:** Drops in ComfyUI-Manager automatically so you have the essentials out of the box.
-- 💻 **Shell-aware aliases:** Creates/updates a `comfyui-start` alias for Bash, Zsh, and Fish (and a `comfyui-venv` helper).
-- 🧼 **Re-runnable:** Safe to execute multiple times — it checks for existing installs and skips redundant steps.
-- 🛡️ **Install guardrails:** Refuses to overwrite an existing `ComfyUI` checkout so you don’t clobber your current setup by mistake.
+- 💻 **Shell-aware aliases:** Creates/updates `comfyui-start` / `comfyui-venv` and, for Accelerator installs, `comfyui-start-sage` / `comfyui-start-sage-fp16`; suffixes are handled when multiple installs exist.
+- 🧼 **Re-runnable:** Detects existing installs, reuses/updates aliases instead of duplicating them, and refreshes code in-place without deleting your `models/`.
+- 🛡️ **Install guardrails:** Prompts before overwriting an existing ComfyUI folder; refreshes code while keeping your downloaded models intact.
 
 ---
 
@@ -55,30 +54,28 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 ```bash
 git clone https://github.com/ArcticLatent/linux-comfy-installer.git
 cd linux-comfy-installer
-chmod +x install-comfy.sh
-./install-comfy.sh
+chmod +x install_comfyui.sh
+./install_comfyui.sh
 ```
 
 ### Or run directly via curl
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install-comfy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install_comfyui.sh | bash
 ```
 
 The script will:
 
-- Present a main menu so you can either install ComfyUI end-to-end or only add precompiled Linux wheels.
-- When you choose **Install ComfyUI**, it will:
-  1. Ask for your Linux distribution.
-  2. Ask for your NVIDIA GPU generation.
-  3. Offer to install the SageAttention 2.2.0 wheel (with hardware compatibility notes).
-  4. Install all required dependencies.
-  5. Set up `pyenv` and Python 3.12.6.
-  6. Install ComfyUI inside a virtual environment and add ComfyUI-Manager under `custom_nodes/`.
-  7. Create/update `comfyui-start` and `comfyui-venv` aliases for your shell (and append `--use-sage-attention` automatically when installed).
-- When you choose **Install precompiled wheels**, it will:
-  1. Confirm your existing ComfyUI directory (with venv).
-  2. Let you install SageAttention 2.2.0 (alias-aware) or InsightFace 0.7.3 directly into that environment.
+- Present a main menu:
+  1. **Install ComfyUI (native PyTorch attention)** — unified CUDA 12.8 stack (torch 2.8.0 cu128).
+  2. **Install ComfyUI with Accelerator** — uses bundled `assets/acceleritor_torch271cu128.txt` (torch 2.7.1 cu128 + xFormers/FlashAttention/SageAttention/Triton) and adds `comfyui-start-sage` / `comfyui-start-sage-fp16` aliases.
+  3. **Install precompiled wheels** — add InsightFace 0.7.3 to an existing ComfyUI venv.
+  4. **Install LoRA trainers** — optional Fluxgym helper.
+- Flow highlights:
+  - Asks for your Linux distribution, installs build deps, and sets up `pyenv` with Python 3.12.6.
+  - Clones or refreshes ComfyUI in-place; if the folder already contains ComfyUI, you can refresh without deleting `models/`.
+  - Adds ComfyUI-Manager under `custom_nodes/`.
+  - Creates or reuses shell aliases; if other installs already use `comfyui-start`, suffixes like `comfyui-start2` are assigned automatically.
 
 ---
 
@@ -94,6 +91,12 @@ This will:
 - Activate the virtual environment
 - Start ComfyUI with the correct PyTorch + CUDA stack
 
+If you installed with the Accelerator option, you also get:
+- `comfyui-start-sage` (`--use-sage-attention`)
+- `comfyui-start-sage-fp16` (`--use-sage-attention --fast`)
+
+If suffixes were needed (e.g., `comfyui-start2`), use the names shown at the end of the installer output.
+
 To deactivate the environment at any time:
 
 ```bash
@@ -104,11 +107,10 @@ deactivate
 
 ### Precompiled wheel installer
 
-Run the script again and pick option **2) Install precompiled wheels** to add extra packages to an existing ComfyUI setup. The installer will:
+Run the script again and pick option **3) Install precompiled wheels** to add extra packages to an existing ComfyUI setup. The installer will:
 
 - Validate the ComfyUI directory and virtual environment you point it to.
 - Offer the current catalog of Linux wheels:
-  - SageAttention 2.2.0 (adds `--use-sage-attention` to your aliases automatically)
   - InsightFace 0.7.3
 
 More wheels can be added later — rerun the installer whenever you need to update or install additional ones.
