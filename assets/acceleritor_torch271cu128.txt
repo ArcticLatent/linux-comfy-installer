@@ -1,0 +1,28 @@
+#PYTORCH*********************************************************************
+# --extra-index-url=https://download.pytorch.org/whl/nightly/cpu ; sys_platform  == 'darwin'
+--extra-index-url=https://download.pytorch.org/whl/cu128
+torch==2.7.1 ; sys_platform  != 'darwin'
+torch ; sys_platform  == 'darwin'
+torchsde
+torchvision
+torchaudio
+
+
+#XFORMERS*******************************************************************
+#needs pytorch
+xformers ; sys_platform  != 'darwin'
+
+
+# TRITON********************************************************************
+# Needs Pytorch
+triton==3.3.1 ; sys_platform == 'linux'
+
+
+#FLASH ATTENTION************************************************************
+#Needs pytorch
+https://huggingface.co/arcticlatent/accelerator/resolve/main/flash_attn-2.8.0%2Bcu129torch2.7.1-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux'  and python_version == "3.12" #egg2.8.0
+
+
+#SAGE ATTENTION*************************************************************
+#Needs Pytorch, Triton
+https://huggingface.co/arcticlatent/accelerator/resolve/main/sageattention-2.2.0%2Bcu129torch270-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux' and python_version == "3.12" #egg:v2.2.2

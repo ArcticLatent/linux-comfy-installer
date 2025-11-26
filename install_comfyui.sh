@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="1.11"
+SCRIPT_VERSION="1.14"
 SCRIPT_SOURCE_URL_DEFAULT="https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install_comfyui.sh"
 SCRIPT_SOURCE_URL="${LINUX_COMFY_INSTALLER_SOURCE:-$SCRIPT_SOURCE_URL_DEFAULT}"
+SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
+ACCELERATOR_LOCAL_PATH="${SCRIPT_DIR}/assets/acceleritor_torch271cu128.txt"
 
 # ============================ helpers ============================
 say()  { printf "\033[1;32m[INFO]\033[0m %s\n" "$*"; }
@@ -284,11 +286,145 @@ configure_comfy_aliases() {
   local install_dir="$1"
   local include_sage="${2:-0}"
   local venv_dir="${install_dir}/venv"
-  local user_shell rc_file start_alias venv_alias start_sage_alias=""
+  local user_shell rc_file start_alias venv_alias start_sage_alias="" start_sage_fp16_alias=""
   local suffix="" max_suffix=0 has_alias_for_install=0 suffix_note=""
+  local -a rc_candidates=()
+
+  COMFY_ALIAS_START="${COMFY_ALIAS_START:-}"
+  COMFY_ALIAS_SAGE="${COMFY_ALIAS_SAGE:-}"
+  COMFY_ALIAS_SAGE_FP16="${COMFY_ALIAS_SAGE_FP16:-}"
+  COMFY_ALIAS_VENV="${COMFY_ALIAS_VENV:-}"
 
   user_shell=$(basename "${SHELL:-bash}")
 
+  [[ -f "$HOME/.bashrc" || "$user_shell" == "bash" ]] && rc_candidates+=("bash:$HOME/.bashrc")
+  [[ -f "$HOME/.zshrc"  || "$user_shell" == "zsh"  ]] && rc_candidates+=("zsh:$HOME/.zshrc")
+  [[ -f "$HOME/.config/fish/config.fish" || "$user_shell" == "fish" ]] && rc_candidates+=("fish:$HOME/.config/fish/config.fish")
+
+  if [[ ${#rc_candidates[@]} -eq 0 ]]; then
+    warn "No known shell rc files found; skipping alias setup."
+    return 0
+  fi
+
+  # Determine suffix and whether aliases for this install already exist across rc files
+  for entry in "${rc_candidates[@]}"; do
+    local rc="${entry#*:}"
+    [[ -f "$rc" ]] || continue
+    if grep -Fq "$install_dir" "$rc"; then
+      has_alias_for_install=1
+    fi
+    while read -r existing_alias; do
+      local name part num
+      name="${existing_alias#alias }"
+      name="${name%%[ =]*}"
+      part="${name#comfyui-start}"
+      if [[ -z "$part" ]]; then
+        num=1
+      elif [[ "$part" =~ ^[0-9]+$ ]]; then
+        num="$part"
+      else
+        continue
+      fi
+      if (( num > max_suffix )); then
+        max_suffix="$num"
+      fi
+    done < <(grep -E '^alias[[:space:]]+comfyui-start[0-9]*\b' "$rc" || true)
+  done
+
+  # Reuse existing aliases for this install (no duplicates)
+  if [[ "$has_alias_for_install" -eq 1 ]]; then
+    for entry in "${rc_candidates[@]}"; do
+      local rc="${entry#*:}"
+      [[ -f "$rc" ]] || continue
+      while read -r line; do
+        local name
+        [[ "$line" != *"$install_dir"* ]] && continue
+        name="${line#alias }"
+        name="${name%%[ =]*}"
+        case "$name" in
+          comfyui-start*) COMFY_ALIAS_START="${COMFY_ALIAS_START:-$name}" ;;
+          comfyui-start-sage*) COMFY_ALIAS_SAGE="${COMFY_ALIAS_SAGE:-$name}" ;;
+          comfyui-start-sage-fp16*) COMFY_ALIAS_SAGE_FP16="${COMFY_ALIAS_SAGE_FP16:-$name}" ;;
+          comfyui-venv*) COMFY_ALIAS_VENV="${COMFY_ALIAS_VENV:-$name}" ;;
+        esac
+      done < <(grep -E '^alias[[:space:]]+comfyui-(start|venv)[^[:space:]]*' "$rc" || true)
+
+      # If this run is native (no Sage), remove Sage aliases from this rc
+      if [[ "$include_sage" -eq 0 ]]; then
+        sed -i '/alias[[:space:]]\+comfyui-start-sage/d;/alias[[:space:]]\+comfyui-start-sage-fp16/d' "$rc"
+        COMFY_ALIAS_SAGE=""
+        COMFY_ALIAS_SAGE_FP16=""
+      fi
+    done
+    # If accelerator run and Sage aliases missing, add them to current shell rc
+    if [[ "$include_sage" -eq 1 && ( -z "$COMFY_ALIAS_SAGE" || -z "$COMFY_ALIAS_SAGE_FP16" ) ]]; then
+      if [[ "$user_shell" == "bash" ]]; then
+        rc_file="$HOME/.bashrc"
+      elif [[ "$user_shell" == "zsh" ]]; then
+        rc_file="$HOME/.zshrc"
+      elif [[ "$user_shell" == "fish" ]]; then
+        rc_file="$HOME/.config/fish/config.fish"
+      else
+        warn "Unknown shell type ($user_shell); skipping Sage alias setup."
+        return 0
+      fi
+      [[ "$user_shell" == "fish" ]] && mkdir -p "$(dirname "$rc_file")"
+      [[ -f "$rc_file" ]] || touch "$rc_file"
+
+      # Derive suffix from existing comfyui-start alias if present
+      suffix=""
+      if [[ -n "$COMFY_ALIAS_START" ]]; then
+        local part="${COMFY_ALIAS_START#comfyui-start}"
+        if [[ "$part" =~ ^[0-9]+$ ]]; then
+          suffix="$part"
+        fi
+      fi
+      COMFY_ALIAS_SAGE="${COMFY_ALIAS_SAGE:-comfyui-start-sage${suffix}}"
+      COMFY_ALIAS_SAGE_FP16="${COMFY_ALIAS_SAGE_FP16:-comfyui-start-sage-fp16${suffix}}"
+
+      if [[ "$user_shell" == "fish" ]]; then
+        start_sage_alias="alias ${COMFY_ALIAS_SAGE} 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188 --use-sage-attention'"
+        start_sage_fp16_alias="alias ${COMFY_ALIAS_SAGE_FP16} 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188 --use-sage-attention --fast'"
+      else
+        start_sage_alias="alias ${COMFY_ALIAS_SAGE}='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention'"
+        start_sage_fp16_alias="alias ${COMFY_ALIAS_SAGE_FP16}='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention --fast'"
+      fi
+      if ! grep -Fq "alias ${COMFY_ALIAS_SAGE}" "$rc_file"; then
+        echo "$start_sage_alias" >> "$rc_file"
+      fi
+      if ! grep -Fq "alias ${COMFY_ALIAS_SAGE_FP16}" "$rc_file"; then
+        echo "$start_sage_fp16_alias" >> "$rc_file"
+      fi
+      say "Added Sage aliases for accelerator install to $rc_file"
+      COMFY_ALIAS_NOTE="Existing aliases reused; Sage aliases added."
+    else
+      say "ComfyUI aliases already exist for $install_dir; skipping duplicate entries."
+      COMFY_ALIAS_NOTE="Existing aliases reused; none added."
+    fi
+
+    # Ensure alias vars are populated for downstream messaging
+    if [[ -z "$suffix" && -n "$COMFY_ALIAS_START" ]]; then
+      part="${COMFY_ALIAS_START#comfyui-start}"
+      if [[ "$part" =~ ^[0-9]+$ ]]; then
+        suffix="$part"
+      fi
+    fi
+    COMFY_ALIAS_START="${COMFY_ALIAS_START:-comfyui-start${suffix}}"
+    COMFY_ALIAS_VENV="${COMFY_ALIAS_VENV:-comfyui-venv${suffix}}"
+    if [[ "$include_sage" -eq 1 ]]; then
+      COMFY_ALIAS_SAGE="${COMFY_ALIAS_SAGE:-comfyui-start-sage${suffix}}"
+      COMFY_ALIAS_SAGE_FP16="${COMFY_ALIAS_SAGE_FP16:-comfyui-start-sage-fp16${suffix}}"
+    fi
+
+    return 0
+  fi
+
+  if [[ "$max_suffix" -ge 1 ]]; then
+    suffix=$((max_suffix + 1))
+    suffix_note="Existing ComfyUI aliases point elsewhere; creating numbered aliases for this install."
+  fi
+
+  # Select rc file for current shell to write new aliases
   if [[ "$user_shell" == "bash" ]]; then
     rc_file="$HOME/.bashrc"
   elif [[ "$user_shell" == "zsh" ]]; then
@@ -300,41 +436,18 @@ configure_comfy_aliases() {
     return 0
   fi
 
+  if [[ "$user_shell" == "fish" ]]; then
+    mkdir -p "$(dirname "$rc_file")"
+  fi
   [[ -f "$rc_file" ]] || touch "$rc_file"
-
-  if grep -Fq "$install_dir" "$rc_file"; then
-    has_alias_for_install=1
-  fi
-
-  while read -r existing_alias; do
-    local name part num
-    name="${existing_alias#alias }"
-    name="${name%%[ =]*}"
-    part="${name#comfyui-start}"
-    if [[ -z "$part" ]]; then
-      num=1
-    elif [[ "$part" =~ ^[0-9]+$ ]]; then
-      num="$part"
-    else
-      continue
-    fi
-    if (( num > max_suffix )); then
-      max_suffix="$num"
-    fi
-  done < <(grep -E '^alias[[:space:]]+comfyui-start[0-9]*\b' "$rc_file" || true)
-
-  if [[ "$has_alias_for_install" -eq 1 ]]; then
-    suffix=""
-  elif [[ "$max_suffix" -ge 1 ]]; then
-    suffix=$((max_suffix + 1))
-    suffix_note="Existing ComfyUI aliases point to a different install; creating numbered aliases for this install."
-  fi
 
   local start_name="comfyui-start${suffix}"
   local venv_name="comfyui-venv${suffix}"
   local start_sage_name=""
+  local start_sage_fp16_name=""
   if [[ "$include_sage" -eq 1 ]]; then
     start_sage_name="comfyui-start-sage${suffix}"
+    start_sage_fp16_name="comfyui-start-sage-fp16${suffix}"
   fi
 
   if [[ "$user_shell" == "fish" ]]; then
@@ -343,12 +456,14 @@ configure_comfy_aliases() {
     venv_alias="alias ${venv_name} 'source ${venv_dir}/bin/activate.fish'"
     if [[ "$include_sage" -eq 1 ]]; then
       start_sage_alias="alias ${start_sage_name} 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188 --use-sage-attention'"
+      start_sage_fp16_alias="alias ${start_sage_fp16_name} 'source ${venv_dir}/bin/activate.fish; python ${install_dir}/main.py --listen 0.0.0.0 --port 8188 --use-sage-attention --fast'"
     fi
   else
     start_alias="alias ${start_name}='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188'"
     venv_alias="alias ${venv_name}='source \"${venv_dir}/bin/activate\"'"
     if [[ "$include_sage" -eq 1 ]]; then
       start_sage_alias="alias ${start_sage_name}='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention'"
+      start_sage_fp16_alias="alias ${start_sage_fp16_name}='source \"${venv_dir}/bin/activate\" && python \"${install_dir}/main.py\" --listen 0.0.0.0 --port 8188 --use-sage-attention --fast'"
     fi
   fi
 
@@ -359,6 +474,11 @@ configure_comfy_aliases() {
   if [[ "$include_sage" -eq 1 && -n "$start_sage_alias" ]]; then
     if ! grep -Fq "alias ${start_sage_name}" "$rc_file"; then
       new_aliases+=("$start_sage_alias")
+    fi
+  fi
+  if [[ "$include_sage" -eq 1 && -n "$start_sage_fp16_alias" ]]; then
+    if ! grep -Fq "alias ${start_sage_fp16_name}" "$rc_file"; then
+      new_aliases+=("$start_sage_fp16_alias")
     fi
   fi
   if ! grep -Fq "alias ${venv_name}" "$rc_file"; then
@@ -389,7 +509,62 @@ configure_comfy_aliases() {
   COMFY_ALIAS_START="$start_name"
   COMFY_ALIAS_VENV="$venv_name"
   COMFY_ALIAS_SAGE="$start_sage_name"
+  COMFY_ALIAS_SAGE_FP16="$start_sage_fp16_name"
   COMFY_ALIAS_NOTE="$suffix_note"
+}
+
+# Re-read aliases from rc files to ensure display uses actual names (handles suffixes across installs)
+refresh_comfy_alias_vars() {
+  local install_dir="$1"
+  local include_sage="${2:-0}"
+  local -a rc_candidates=()
+  local user_shell
+
+  COMFY_ALIAS_START=""
+  COMFY_ALIAS_SAGE=""
+  COMFY_ALIAS_SAGE_FP16=""
+  COMFY_ALIAS_VENV=""
+
+  user_shell=$(basename "${SHELL:-bash}")
+  [[ -f "$HOME/.bashrc" || "$user_shell" == "bash" ]] && rc_candidates+=("$HOME/.bashrc")
+  [[ -f "$HOME/.zshrc"  || "$user_shell" == "zsh"  ]] && rc_candidates+=("$HOME/.zshrc")
+  [[ -f "$HOME/.config/fish/config.fish" || "$user_shell" == "fish" ]] && rc_candidates+=("$HOME/.config/fish/config.fish")
+
+  for rc in "${rc_candidates[@]}"; do
+    [[ -f "$rc" ]] || continue
+    if ! grep -Fq "$install_dir" "$rc"; then
+      continue
+    fi
+    while read -r line; do
+      [[ "$line" != *"$install_dir"* ]] && continue
+      local name
+      name="${line#alias }"
+      name="${name%%[ =]*}"
+      case "$name" in
+        comfyui-start*) COMFY_ALIAS_START="${COMFY_ALIAS_START:-$name}" ;;
+        comfyui-start-sage*) COMFY_ALIAS_SAGE="${COMFY_ALIAS_SAGE:-$name}" ;;
+        comfyui-start-sage-fp16*) COMFY_ALIAS_SAGE_FP16="${COMFY_ALIAS_SAGE_FP16:-$name}" ;;
+        comfyui-venv*) COMFY_ALIAS_VENV="${COMFY_ALIAS_VENV:-$name}" ;;
+      esac
+    done < <(grep -E '^alias[[:space:]]+comfyui-(start|venv)[^[:space:]]*' "$rc" || true)
+  done
+
+  local suffix=""
+  if [[ -n "$COMFY_ALIAS_START" ]]; then
+    local part="${COMFY_ALIAS_START#comfyui-start}"
+    if [[ "$part" =~ ^[0-9]+$ ]]; then
+      suffix="$part"
+    fi
+  fi
+  COMFY_ALIAS_START="${COMFY_ALIAS_START:-comfyui-start${suffix}}"
+  COMFY_ALIAS_VENV="${COMFY_ALIAS_VENV:-comfyui-venv${suffix}}"
+  if [[ "$include_sage" -eq 1 ]]; then
+    COMFY_ALIAS_SAGE="${COMFY_ALIAS_SAGE:-comfyui-start-sage${suffix}}"
+    COMFY_ALIAS_SAGE_FP16="${COMFY_ALIAS_SAGE_FP16:-comfyui-start-sage-fp16${suffix}}"
+  else
+    COMFY_ALIAS_SAGE=""
+    COMFY_ALIAS_SAGE_FP16=""
+  fi
 }
 
 handle_precompiled_wheels_menu() {
@@ -400,20 +575,11 @@ handle_precompiled_wheels_menu() {
   if [[ "${has_comfy}" =~ ^[Yy]$ ]]; then
     if prompt_existing_comfy_path comfy_dir; then
       say "Precompiled wheel options:"
-      echo "  1) Install SageAttention 2.2.0"
-      echo "  2) Install InsightFace 0.7.3"
-      confirm_choice "Enter 1 or 2:" "1 2" wheel_choice
+      echo "  1) Install InsightFace 0.7.3"
+      confirm_choice "Enter 1 to continue:" "1" wheel_choice
 
       case "${wheel_choice}" in
         1)
-          if install_sageattention_into_comfy "${comfy_dir}"; then
-            configure_comfy_aliases "${comfy_dir}" 1
-            say "Precompiled wheel installation finished."
-          else
-            err "Precompiled wheel installation failed."
-          fi
-          ;;
-        2)
           if install_insightface_into_comfy "${comfy_dir}"; then
             say "Precompiled wheel installation finished."
           else
@@ -966,21 +1132,28 @@ check_for_updates
 
 # ===================== primary action selection ====================
 RUN_FULL_INSTALL=0
+INSTALL_MODE="standard"
 
 say "Choose what you would like to install:"
-echo "  1) Install ComfyUI"
-echo "  2) Install precompiled wheels"
-echo "  3) Install LoRA Trainers"
-confirm_choice "Enter 1, 2, or 3:" "1 2 3" PRIMARY_ACTION
+echo "  1) Install ComfyUI (native pytorch attention)"
+echo "  2) Install ComfyUI with Accelerator (Sage, Flash Attention, Triton)"
+echo "  3) Install precompiled wheels"
+echo "  4) Install LoRA Trainers"
+confirm_choice "Enter 1, 2, 3, or 4:" "1 2 3 4" PRIMARY_ACTION
 
 case "$PRIMARY_ACTION" in
   1)
     RUN_FULL_INSTALL=1
+    INSTALL_MODE="standard"
     ;;
   2)
-    handle_precompiled_wheels_menu
+    RUN_FULL_INSTALL=1
+    INSTALL_MODE="accelerator"
     ;;
   3)
+    handle_precompiled_wheels_menu
+    ;;
+  4)
     handle_lora_trainers_menu
     ;;
 esac
@@ -1017,17 +1190,11 @@ fi
 
 say "OS verification passed."
 
-# ======================== choose GPU tier =========================
-say "What NVIDIA GPU series are you using?"
-echo "  1) NVIDIA 4000+ (includes 5000 series)"
-echo "  2) NVIDIA 3000 and below"
-confirm_choice "Enter 1 or 2:" "1 2" GPU_TIER
-
-case "$GPU_TIER" in
-  1) GPU_LABEL="4000+" ;;
-  2) GPU_LABEL="3000_and_below" ;;
-esac
-say "GPU tier: $GPU_LABEL"
+if [[ "$INSTALL_MODE" == "standard" ]]; then
+# ======================== GPU stack note =========================
+GPU_LABEL="unified (CUDA12.8 stack)"
+say "Using unified NVIDIA stack: torch 2.8.0 CUDA12.8 for all supported GPUs (3000/4000/5000 series)."
+fi
 
 # ===================== dev tools per distro =======================
 say "Installing development tool packages for $OS_NAME ..."
@@ -1158,21 +1325,44 @@ while true; do
   break
 done
 
+OVERWRITE_EXISTING=0
 # Sanity checks & prepare parent directories
 if [[ -e "$INSTALL_DIR" && ! -d "$INSTALL_DIR" ]]; then
   err "Path exists and is not a directory: $INSTALL_DIR"
   exit 1
 fi
-if [[ -d "$INSTALL_DIR" && -d "$INSTALL_DIR/.git" ]]; then
-  warn "ComfyUI appears to already be installed at: $INSTALL_DIR"
-  warn "Please remove or rename the existing directory before rerunning this installer."
-  exit 0
+if [[ -d "$INSTALL_DIR" ]]; then
+  if [[ -f "$INSTALL_DIR/requirements.txt" ]]; then
+    warn "Detected an existing ComfyUI installation in $INSTALL_DIR."
+    ask "ComfyUI already installed in this directory. Do you want to overwrite it? (y/n):"
+    read -r OVERWRITE_CHOICE
+    if [[ "$OVERWRITE_CHOICE" =~ ^[Yy]$ ]]; then
+      OVERWRITE_EXISTING=1
+    else
+      say "Exiting without changes."
+      exit 0
+    fi
+  else
+    err "Directory already exists at $INSTALL_DIR and is not empty."
+    err "Please choose another location or remove the directory."
+    exit 1
+  fi
 fi
 mkdir -p "$(dirname "$INSTALL_DIR")"
 
 # ======================= ComfyUI + venv ===========================
-say "Cloning ComfyUI into: $INSTALL_DIR"
-git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$INSTALL_DIR"
+if [[ "$OVERWRITE_EXISTING" -eq 1 ]]; then
+  say "Refreshing existing ComfyUI in $INSTALL_DIR without deleting existing files (models kept)..."
+  TEMP_CLONE="$(mktemp -d "${TMPDIR:-/tmp}/comfyui.clone.XXXXXX")"
+  git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$TEMP_CLONE"
+  rm -rf "$TEMP_CLONE/.git"
+  mkdir -p "$INSTALL_DIR"
+  cp -a "$TEMP_CLONE"/. "$INSTALL_DIR"/
+  rm -rf "$TEMP_CLONE"
+else
+  say "Cloning ComfyUI into: $INSTALL_DIR"
+  git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$INSTALL_DIR"
+fi
 
 say "Creating Python virtual environment (pyenv $PYTHON_VERSION)..."
 pyenv local "$PYTHON_VERSION"
@@ -1192,25 +1382,18 @@ if [[ ! "$READY" =~ ^[Yy]$ ]]; then
   exit 0
 fi
 
-# =================== Select Torch/CUDA by GPU tier =================
-# For option 2, we use version PAIRS with fallback to avoid resolver errors.
-if [[ "${GPU_TIER}" == "2" ]]; then
-  TORCH_PAIRS=("2.7.1 0.22.1" "2.7.0 0.22.0")   # (torch vision)
-  AUDIO_VER="${AUDIO_VER:-2.7.1}"
-  TRITON_VER="${TRITON_VER:-}"                  # let pip resolve or omit for 2.7.x
-  TRY_CUDA_STREAMS=("cu121" "cu118")            # CUDA streams to try
-else
+if [[ "$INSTALL_MODE" == "standard" ]]; then
+  # =================== Select Torch/CUDA stack (unified) =================
   TORCH_PAIRS=("2.8.0 0.23.0")
   AUDIO_VER="${AUDIO_VER:-2.8.0}"
   TRITON_VER="${TRITON_VER:-3.4.0}"
   TRY_CUDA_STREAMS=("cu128" "cu126" "cu124")
-fi
 
-# =================== PyTorch stack (native attention) =============
-say "Installing PyTorch (CUDA wheels), native attention (no xformers)..."
+  # =================== PyTorch stack (native attention) =============
+  say "Installing PyTorch (CUDA wheels), native attention (no xformers)..."
 
-# Clean slate so the resolver can't fight older remnants
-python - <<'PY'
+  # Clean slate so the resolver can't fight older remnants
+  python - <<'PY'
 import sys, subprocess
 pkgs = ["xformers","triton","torch","torchvision","torchaudio",
         "nvidia-cublas-cu12","nvidia-cuda-nvrtc-cu12","nvidia-cuda-runtime-cu12",
@@ -1220,83 +1403,80 @@ pkgs = ["xformers","triton","torch","torchvision","torchaudio",
 subprocess.call([sys.executable,"-m","pip","uninstall","-y"]+pkgs)
 PY
 
-PYTORCH_OK=0
-CUDA_PICKED=""
-TORCH_VER=""
-VISION_VER=""
+  PYTORCH_OK=0
+  CUDA_PICKED=""
+  TORCH_VER=""
+  VISION_VER=""
 
-# Try GPU streams with version pairs
-for pair in "${TORCH_PAIRS[@]}"; do
-  TORCH_VER="${pair%% *}"
-  VISION_VER="${pair##* }"
-  for stream in "${TRY_CUDA_STREAMS[@]}"; do
-    export PIP_INDEX_URL="https://download.pytorch.org/whl/${stream}"
-    export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
-    say "Trying torch==${TORCH_VER}, torchvision==${VISION_VER} on ${stream} ..."
-    install_cmd=(python -m pip install --no-cache-dir --force-reinstall
-                 "torch==${TORCH_VER}" "torchvision==${VISION_VER}" "torchaudio==${AUDIO_VER}")
-    if [[ -n "${TRITON_VER:-}" ]]; then install_cmd+=("triton==${TRITON_VER}"); fi
-    if "${install_cmd[@]}"; then
-      CUDA_PICKED="$stream"
-      PYTORCH_OK=1
-      break 2
-    fi
-  done
-done
-
-# If all CUDA streams failed, try CPU wheels with the same version pairs
-if [[ $PYTORCH_OK -ne 1 ]]; then
-  warn "CUDA wheels failed; trying CPU-only wheels..."
-  export PIP_INDEX_URL="https://download.pytorch.org/whl/cpu"
-  export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
+  # Try GPU streams with version pairs
   for pair in "${TORCH_PAIRS[@]}"; do
     TORCH_VER="${pair%% *}"
     VISION_VER="${pair##* }"
-    say "Trying torch==${TORCH_VER}, torchvision==${VISION_VER} on CPU ..."
-    install_cmd=(python -m pip install --no-cache-dir --force-reinstall
-                 "torch==${TORCH_VER}" "torchvision==${VISION_VER}" "torchaudio==${AUDIO_VER}")
-    if [[ -n "${TRITON_VER:-}" ]]; then install_cmd+=("triton==${TRITON_VER}"); fi
-    if "${install_cmd[@]}"; then
-      CUDA_PICKED="cpu"
-      PYTORCH_OK=1
-      break
-    fi
+    for stream in "${TRY_CUDA_STREAMS[@]}"; do
+      export PIP_INDEX_URL="https://download.pytorch.org/whl/${stream}"
+      export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
+      say "Trying torch==${TORCH_VER}, torchvision==${VISION_VER} on ${stream} ..."
+      install_cmd=(python -m pip install --no-cache-dir --force-reinstall
+                   "torch==${TORCH_VER}" "torchvision==${VISION_VER}" "torchaudio==${AUDIO_VER}")
+      if [[ -n "${TRITON_VER:-}" ]]; then install_cmd+=("triton==${TRITON_VER}"); fi
+      if "${install_cmd[@]}"; then
+        CUDA_PICKED="$stream"
+        PYTORCH_OK=1
+        break 2
+      fi
+    done
   done
-fi
 
-if [[ $PYTORCH_OK -ne 1 ]]; then
-  err "Could not install PyTorch stack."
-  exit 1
-fi
-say "PyTorch install target: ${CUDA_PICKED}"
-
-# ========== Install ComfyUI requirements (respect Torch pins) ==========
-PIN_FILE="$INSTALL_DIR/.torch-pins.txt"
-{
-  echo "torch==${TORCH_VER}"
-  echo "torchvision==${VISION_VER}"
-  echo "torchaudio==${AUDIO_VER}"
-  if [[ -n "${TRITON_VER:-}" ]]; then
-    echo "triton==${TRITON_VER}"
+  # If all CUDA streams failed, try CPU wheels with the same version pairs
+  if [[ $PYTORCH_OK -ne 1 ]]; then
+    warn "CUDA wheels failed; trying CPU-only wheels..."
+    export PIP_INDEX_URL="https://download.pytorch.org/whl/cpu"
+    export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
+    for pair in "${TORCH_PAIRS[@]}"; do
+      TORCH_VER="${pair%% *}"
+      VISION_VER="${pair##* }"
+      say "Trying torch==${TORCH_VER}, torchvision==${VISION_VER} on CPU ..."
+      install_cmd=(python -m pip install --no-cache-dir --force-reinstall
+                   "torch==${TORCH_VER}" "torchvision==${VISION_VER}" "torchaudio==${AUDIO_VER}")
+      if [[ -n "${TRITON_VER:-}" ]]; then install_cmd+=("triton==${TRITON_VER}"); fi
+      if "${install_cmd[@]}"; then
+        CUDA_PICKED="cpu"
+        PYTORCH_OK=1
+        break
+      fi
+    done
   fi
-} > "$PIN_FILE"
 
-FIL_REQ="$INSTALL_DIR/.requirements.notorch.txt"
-# Strip any torch/vision/audio/xformers entries so pip won't change our pins
-grep -viE '^(torch|torchvision|torchaudio|xformers)([=<> ]|$)' "$INSTALL_DIR/requirements.txt" > "$FIL_REQ" || true
+  if [[ $PYTORCH_OK -ne 1 ]]; then
+    err "Could not install PyTorch stack."
+    exit 1
+  fi
+  say "PyTorch install target: ${CUDA_PICKED}"
 
-# Keep chosen CUDA index for the rest
-export PIP_INDEX_URL="https://download.pytorch.org/whl/${CUDA_PICKED}"
-export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
+  # ========== Install ComfyUI requirements (respect Torch pins) ==========
+  PIN_FILE="$INSTALL_DIR/.torch-pins.txt"
+  {
+    echo "torch==${TORCH_VER}"
+    echo "torchvision==${VISION_VER}"
+    echo "torchaudio==${AUDIO_VER}"
+    if [[ -n "${TRITON_VER:-}" ]]; then
+      echo "triton==${TRITON_VER}"
+    fi
+  } > "$PIN_FILE"
 
-say "Installing ComfyUI requirements (respecting pins; avoiding xformers)..."
-python -m pip install --upgrade -r "$FIL_REQ" -c "$PIN_FILE"
+  FIL_REQ="$INSTALL_DIR/.requirements.notorch.txt"
+  # Strip any torch/vision/audio/xformers/triton entries so pip won't change our pins
+  grep -viE '^(torch|torchvision|torchaudio|xformers|triton)([=<> ]|$)' "$INSTALL_DIR/requirements.txt" > "$FIL_REQ" || true
 
-# Ensure PyYAML present (ComfyUI imports yaml)
-python -m pip install --upgrade pyyaml
+  # Keep chosen CUDA index for the rest
+  export PIP_INDEX_URL="https://download.pytorch.org/whl/${CUDA_PICKED}"
+  export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
 
-# Ensure xformers stays out (we want native SDPA)
-python - <<'PY'
+  say "Installing ComfyUI requirements (respecting pins; avoiding xformers)..."
+  python -m pip install --upgrade -r "$FIL_REQ" -c "$PIN_FILE"
+
+  # Ensure xformers stays out (we want native SDPA)
+  python - <<'PY'
 import importlib, subprocess, sys
 try:
     importlib.import_module("xformers")
@@ -1305,6 +1485,45 @@ try:
 except ImportError:
     pass
 PY
+else
+  say "Installing ComfyUI with Accelerator (Torch 2.7.1 CUDA 12.8 + xFormers/FlashAttention/SageAttention/Triton)..."
+  ACCEL_FILE_PATH="${INSTALL_DIR}/acceleritor_torch271cu128_lite.txt"
+  if [[ ! -f "$ACCELERATOR_LOCAL_PATH" ]]; then
+    err "Accelerator file not found at $ACCELERATOR_LOCAL_PATH. Please ensure assets are present."
+    exit 1
+  fi
+  cp "$ACCELERATOR_LOCAL_PATH" "$ACCEL_FILE_PATH"
+
+  unset PIP_INDEX_URL PIP_EXTRA_INDEX_URL
+  python -m pip install --upgrade pip wheel setuptools
+  python -m pip install --no-cache-dir -r "$ACCEL_FILE_PATH"
+
+  PIN_FILE="$INSTALL_DIR/.torch-pins.txt"
+  python - "$PIN_FILE" <<'PY'
+import sys, importlib.metadata as md
+names = ["torch","torchvision","torchaudio","triton","xformers","flash_attn","sageattention"]
+pins = []
+for name in names:
+    try:
+        pins.append(f"{name}=={md.version(name)}")
+    except md.PackageNotFoundError:
+        continue
+with open(sys.argv[1], "w", encoding="utf-8") as fh:
+    for line in pins:
+        fh.write(line + "\n")
+if not pins:
+    raise SystemExit("No accelerator packages detected; Accelerator install may have failed.")
+PY
+
+  FIL_REQ="$INSTALL_DIR/.requirements.notorch.txt"
+  grep -viE '^(torch|torchvision|torchaudio|xformers|triton)([=<> ]|$)' "$INSTALL_DIR/requirements.txt" > "$FIL_REQ" || true
+
+  say "Installing ComfyUI requirements (respecting accelerator pins)..."
+  python -m pip install --upgrade -r "$FIL_REQ" -c "$PIN_FILE"
+fi
+
+# Ensure PyYAML present (ComfyUI imports yaml)
+python -m pip install --upgrade pyyaml
 
 # ===================== Custom node bootstrap ======================
 say "Setting up ComfyUI custom nodes (Manager only)..."
@@ -1369,7 +1588,18 @@ PY
 
 # ====================== Shell alias setup =========================
 say "Setting up ComfyUI aliases for your shell..."
-configure_comfy_aliases "$INSTALL_DIR" 0
+SAGE_ALIAS_FLAG=0
+if [[ "$INSTALL_MODE" == "accelerator" ]]; then
+  SAGE_ALIAS_FLAG=1
+fi
+configure_comfy_aliases "$INSTALL_DIR" "$SAGE_ALIAS_FLAG"
+refresh_comfy_alias_vars "$INSTALL_DIR" "$SAGE_ALIAS_FLAG"
+if [[ "$SAGE_ALIAS_FLAG" -eq 1 ]]; then
+  say "Accelerator aliases:"
+  say "  ${COMFY_ALIAS_START:-comfyui-start} uses xFormers by default."
+  say "  ${COMFY_ALIAS_SAGE:-comfyui-start-sage} adds --use-sage-attention."
+  say "  ${COMFY_ALIAS_SAGE_FP16:-comfyui-start-sage-fp16} adds --use-sage-attention --fast."
+fi
 
 # ============================ finishing ===========================
 say "ComfyUI is ready."
@@ -1380,6 +1610,12 @@ USER_SHELL=$(basename "${SHELL:-bash}")
 ALIAS_START="${COMFY_ALIAS_START:-comfyui-start}"
 ALIAS_VENV="${COMFY_ALIAS_VENV:-comfyui-venv}"
 ALIAS_SAGE="${COMFY_ALIAS_SAGE:-}"
+ALIAS_SAGE_FP16="${COMFY_ALIAS_SAGE_FP16:-}"
+if [[ "$INSTALL_MODE" == "accelerator" ]]; then
+  START_NOTE="uses xFormers by default"
+else
+  START_NOTE="with native attention"
+fi
 echo "  1) Activate venv and start manually:"
 if [[ "$USER_SHELL" == "fish" ]]; then
   echo "       source \"$VENV_DIR/bin/activate.fish\""
@@ -1388,8 +1624,9 @@ else
 fi
 echo "       python \"$INSTALL_DIR/main.py\" --listen 0.0.0.0 --port 8188"
 echo "  2) Or use the new aliases (after reloading your shell):"
-echo "       ${ALIAS_START}        # activate venv + launch with native attention"
-if [[ -n "$ALIAS_SAGE" ]]; then
-  echo "       ${ALIAS_SAGE}   # activate venv + launch with SageAttention"
+echo "       ${ALIAS_START}        # activate venv + launch ${START_NOTE}"
+if [[ "$INSTALL_MODE" == "accelerator" ]]; then
+  echo "       ${ALIAS_SAGE:-comfyui-start-sage}        # activate venv + launch with SageAttention (--use-sage-attention)"
+  echo "       ${ALIAS_SAGE_FP16:-comfyui-start-sage-fp16}   # activate venv + launch with SageAttention (--use-sage-attention --fast)"
 fi
 echo "       ${ALIAS_VENV}         # activate venv only"
