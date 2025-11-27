@@ -1031,7 +1031,17 @@ detect_os_family() {
   . /etc/os-release
   local id="${ID,,}"
   local id_like="${ID_LIKE:-}"
+  local version_id="${VERSION_ID:-}"
   id_like="${id_like,,}"
+  version_id="${version_id,,}"
+
+  if [[ "$id" == "debian" ]]; then
+    # Treat Debian 13 separately so we can install the correct ncurses package.
+    if [[ "${version_id%%.*}" == "13" ]]; then
+      echo "debian13"
+      return 0
+    fi
+  fi
 
   case "$id" in
     fedora|rhel|centos|rocky|almalinux) echo "fedora"; return 0 ;;
@@ -1041,6 +1051,12 @@ detect_os_family() {
 
   for token in $id_like; do
     case "$token" in
+      debian)
+        if [[ "${version_id%%.*}" == "13" ]]; then
+          echo "debian13"
+          return 0
+        fi
+        ;;
       fedora|rhel|centos) echo "fedora"; return 0 ;;
       ubuntu|debian) echo "ubuntu"; return 0 ;;
       arch) echo "arch"; return 0 ;;
@@ -1167,17 +1183,19 @@ say "Which Linux distribution are you using?"
 echo "  1) Fedora"
 echo "  2) Ubuntu (22.04/24.04+) / Linux Mint 22+"
 echo "  3) Arch-based (Arch/Manjaro/Endeavour)"
-confirm_choice "Enter 1, 2, or 3:" "1 2 3" OS_CHOICE
+echo "  4) Debian 13"
+confirm_choice "Enter 1, 2, 3, or 4:" "1 2 3 4" OS_CHOICE
 
 case "$OS_CHOICE" in
   1) OS_NAME="fedora" ;;
   2) OS_NAME="ubuntu" ;;
   3) OS_NAME="arch" ;;
+  4) OS_NAME="debian13" ;;
 esac
 say "Selected OS: $OS_NAME"
 
 if ! DETECTED_OS="$(detect_os_family)"; then
-  err "Automatic OS verification failed. This installer currently supports Fedora, Ubuntu/Linux Mint, and Arch-based distributions."
+  err "Automatic OS verification failed. This installer currently supports Fedora, Ubuntu/Linux Mint, Debian 13, and Arch-based distributions."
   exit 1
 fi
 
@@ -1246,6 +1264,13 @@ elif [[ "$OS_NAME" == "ubuntu" ]]; then
     libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev tk-dev \
     libffi-dev xz-utils ca-certificates pkg-config \
     liblzma-dev libgdbm-dev libnss3-dev libncursesw5-dev
+
+elif [[ "$OS_NAME" == "debian13" ]]; then
+  sudo apt-get update
+  sudo apt-get install -y build-essential git curl ffmpeg make cmake \
+    libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev tk-dev \
+    libffi-dev xz-utils ca-certificates pkg-config \
+    liblzma-dev libgdbm-dev libnss3-dev libncurses-dev
 
 elif [[ "$OS_NAME" == "arch" ]]; then
   sudo pacman -Syu --noconfirm
