@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="1.15"
+SCRIPT_VERSION="1.16"
 SCRIPT_SOURCE_URL_DEFAULT="https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install_comfyui.sh"
 SCRIPT_SOURCE_URL="${LINUX_COMFY_INSTALLER_SOURCE:-$SCRIPT_SOURCE_URL_DEFAULT}"
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
@@ -1377,19 +1377,18 @@ mkdir -p "$(dirname "$INSTALL_DIR")"
 
 # ======================= ComfyUI + venv ===========================
 if [[ "$OVERWRITE_EXISTING" -eq 1 ]]; then
-  say "Refreshing existing ComfyUI in $INSTALL_DIR; preserving models/ and custom_nodes/..."
+  say "Refreshing existing ComfyUI in $INSTALL_DIR; preserving models/..."
   TEMP_CLONE="$(mktemp -d "${TMPDIR:-/tmp}/comfyui.clone.XXXXXX")"
   git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$TEMP_CLONE"
   rm -rf "$TEMP_CLONE/.git"
   if [[ -d "$INSTALL_DIR" ]]; then
-    say "Removing existing contents except models/ and custom_nodes/..."
+    say "Removing existing contents except models/..."
     find "$INSTALL_DIR" -mindepth 1 -maxdepth 1 \
       ! -name "models" \
-      ! -name "custom_nodes" \
       -exec rm -rf {} +
   fi
   mkdir -p "$INSTALL_DIR"
-  rm -rf "$TEMP_CLONE/models" "$TEMP_CLONE/custom_nodes"
+  rm -rf "$TEMP_CLONE/models"
   cp -a "$TEMP_CLONE"/. "$INSTALL_DIR"/
   mkdir -p "$INSTALL_DIR/models" "$INSTALL_DIR/custom_nodes"
   rm -rf "$TEMP_CLONE"
