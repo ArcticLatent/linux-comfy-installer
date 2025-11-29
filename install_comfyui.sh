@@ -252,6 +252,78 @@ prompt_existing_comfy_path() {
   done
 }
 
+configure_extra_model_path() {
+  local install_dir="$1"
+  local example_path="${install_dir}/extra_model_paths.yaml.example"
+  local target_path="${install_dir}/extra_model_paths.yaml"
+  local choice="" extra_models_path="" default_choice="" is_default_value=""
+
+  ask "Configure an extra model folder for ComfyUI? (y/n):"
+  read -r choice
+  if [[ ! "$choice" =~ ^[Yy]$ ]]; then
+    return 0
+  fi
+
+  if [[ -f "$example_path" ]]; then
+    mv "$example_path" "$target_path"
+  elif [[ -f "$target_path" ]]; then
+    say "Found existing extra_model_paths.yaml; it will be overwritten."
+  else
+    warn "extra_model_paths.yaml.example not found in ${install_dir}; skipping extra model path setup."
+    return 0
+  fi
+
+  while true; do
+    ask "Enter absolute path for extra model folder (e.g. /mnt/cache/models):"
+    read -r extra_models_path
+    if [[ -z "$extra_models_path" ]]; then
+      warn "Path cannot be empty."
+      continue
+    fi
+    if [[ "$extra_models_path" != /* ]]; then
+      warn "Please enter a full absolute path starting with '/'."
+      continue
+    fi
+    break
+  done
+
+  : > "$target_path"
+
+  ask "Should this folder be the default models folder for ComfyUI? (y/n):"
+  read -r default_choice
+  if [[ "$default_choice" =~ ^[Yy]$ ]]; then
+    is_default_value="true"
+  else
+    is_default_value="false"
+  fi
+
+  cat >> "$target_path" <<EOF
+comfyui:
+  base_path: ${extra_models_path}
+  # Optional - makes these your main/default save/load location
+  is_default: ${is_default_value}
+
+  checkpoints: checkpoints
+  text_encoders: |
+    text_encoders
+    clip             # legacy format still supported
+  clip_vision: clip_vision
+  configs: configs
+  controlnet: controlnet
+  diffusion_models: |
+    diffusion_models
+    unet
+  embeddings: embeddings
+  loras: loras
+  upscale_models: upscale_models
+  vae: vae
+  audio_encoders: audio_encoders
+  model_patches: model_patches
+EOF
+
+  say "extra_model_paths.yaml created at ${target_path}"
+}
+
 install_sageattention_into_comfy() {
   local comfy_dir="$1"
   local python_bin="${comfy_dir}/venv/bin/python"
@@ -1396,6 +1468,8 @@ else
   say "Cloning ComfyUI into: $INSTALL_DIR"
   git clone --depth=1 https://github.com/comfyanonymous/ComfyUI.git "$INSTALL_DIR"
 fi
+
+configure_extra_model_path "$INSTALL_DIR"
 
 say "Creating Python virtual environment (pyenv $PYTHON_VERSION)..."
 pyenv local "$PYTHON_VERSION"
