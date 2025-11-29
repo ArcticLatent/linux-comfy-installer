@@ -4,6 +4,7 @@
 ![Fedora Supported](https://img.shields.io/badge/Fedora-41%2F42%2B-blue?logo=fedora&logoColor=white)
 ![Ubuntu Supported](https://img.shields.io/badge/Ubuntu-22.04%2F24.04%2B-E95420?logo=ubuntu&logoColor=white)
 ![Linux Mint Supported](https://img.shields.io/badge/Linux%20Mint-22%2B-87CF3E?logo=linuxmint&logoColor=white)
+![Debian Supported](https://img.shields.io/badge/Debian-13%2B-A81D33?logo=debian&logoColor=white)
 ![Arch Supported](https://img.shields.io/badge/Arch%20Linux-Endeavour%2FManjaro-1793D1?logo=arch-linux&logoColor=white)
 ![GPU Support](https://img.shields.io/badge/NVIDIA-RTX%202000%2F3000%2F4000%2F5000-%2376B900?logo=nvidia&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12.6-3776AB?logo=python&logoColor=white)
