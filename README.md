@@ -21,6 +21,7 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 - 🐍 **Python isolation:** Uses **pyenv** to manage Python 3.12.6 safely without polluting your system.
 - 🧩 **Dependencies handled:** Installs build tools, curl, git, ffmpeg, and all other required dev packages automatically.
 - 🎮 **Two install modes:** Option 1 installs native PyTorch attention (no xformers); Option 2 installs the Accelerator stack (Torch 2.7.1 cu128 + xFormers/FlashAttention/SageAttention/Triton) using the bundled `assets/acceleritor_torch271cu128.txt`.
+- 📂 **Extra model folder:** Optionally writes `extra_model_paths.yaml` so you can point ComfyUI at a separate models directory (and even make it the default).
 - 🧱 **Custom nodes bootstrap:** Drops in ComfyUI-Manager automatically so you have the essentials out of the box.
 - 💻 **Shell-aware aliases:** Creates/updates `comfyui-start` / `comfyui-venv` and, for Accelerator installs, `comfyui-start-sage` / `comfyui-start-sage-fp16`; suffixes are handled when multiple installs exist.
 - 🧼 **Re-runnable:** Detects existing installs, reuses/updates aliases instead of duplicating them, and refreshes code in-place without deleting your `models/`.
@@ -71,9 +72,11 @@ The script will:
   2. **Install ComfyUI with Accelerator** — uses bundled `assets/acceleritor_torch271cu128.txt` (torch 2.7.1 cu128 + xFormers/FlashAttention/SageAttention/Triton) and adds `comfyui-start-sage` / `comfyui-start-sage-fp16` aliases.
   3. **Install precompiled wheels** — add InsightFace 0.7.3 to an existing ComfyUI venv.
   4. **Install LoRA trainers** — optional Fluxgym helper.
+  5. **Extra model paths:** After choosing install options 1 or 2, you can optionally wire up `extra_model_paths.yaml` to share a single models folder across multiple ComfyUI installs—handy when you keep separate ComfyUI versions but want one models cache.
 - Flow highlights:
   - Asks for your Linux distribution, installs build deps, and sets up `pyenv` with Python 3.12.6.
   - Clones or refreshes ComfyUI in-place; if the folder already contains ComfyUI, you can refresh without deleting `models/`.
+  - Prompts to create `extra_model_paths.yaml` so you can store models on another drive and optionally make that path your default save/load location.
   - Adds ComfyUI-Manager under `custom_nodes/`.
   - Creates or reuses shell aliases; if other installs already use `comfyui-start`, suffixes like `comfyui-start2` are assigned automatically.
 
@@ -102,6 +105,12 @@ To deactivate the environment at any time:
 ```bash
 deactivate
 ```
+
+### Extra model folder (optional)
+
+During install you’ll be asked whether to configure an extra models directory. If you say yes, the installer copies ComfyUI’s `extra_model_paths.yaml.example` to `extra_model_paths.yaml`, points `base_path` at the path you provide (e.g. `/mnt/cache/models`), and lets you decide if it should become the default save/load location (`is_default: true`). Choose no to skip and keep ComfyUI’s built-in `models/` folder.
+
+Tip: This is handy when you run multiple ComfyUI installs—point them all to the same external models folder to avoid duplicate downloads.
 
 ---
 
