@@ -21,7 +21,7 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 - ⚙️ **Unified GPU stack:** Installs a single CUDA 12.8 stack (PyTorch 2.8.0 + cu128) that works on RTX 3000 / 4000 / 5000 series.
 - 🐍 **Python isolation:** Uses **pyenv** to manage Python 3.12.6 safely without polluting your system.
 - 🧩 **Dependencies handled:** Installs build tools, curl, git, ffmpeg, and all other required dev packages automatically.
-- 🎮 **Two install modes:** Option 1 installs native PyTorch attention (no xformers); Option 2 installs the Accelerator stack (Torch 2.7.1 cu128 + xFormers/FlashAttention/SageAttention/Triton) using the bundled `assets/acceleritor_torch271cu128.txt`.
+- 🎮 **Two install modes:** Option 1 installs native PyTorch attention (no xformers); Option 2 installs the Accelerator stack (Torch 2.7.1 cu128 + FlashAttention/SageAttention/Triton, still no xformers) using the bundled `assets/acceleritor_torch271cu128.txt`.
 - 📂 **Extra model folder:** Optionally writes `extra_model_paths.yaml` so you can point ComfyUI at a separate models directory (and even make it the default).
 - 🧱 **Custom nodes bootstrap:** Drops in ComfyUI-Manager automatically so you have the essentials out of the box.
 - 💻 **Shell-aware aliases:** Creates/updates `comfyui-start` / `comfyui-venv` and, for Accelerator installs, `comfyui-start-sage` / `comfyui-start-sage-fp16`; suffixes are handled when multiple installs exist.
@@ -70,7 +70,7 @@ The script will:
 
 - Present a main menu:
   1. **Install ComfyUI (native PyTorch attention)** — unified CUDA 12.8 stack (torch 2.8.0 cu128).
-  2. **Install ComfyUI with Accelerator** — uses bundled `assets/acceleritor_torch271cu128.txt` (torch 2.7.1 cu128 + xFormers/FlashAttention/SageAttention/Triton) and adds `comfyui-start-sage` / `comfyui-start-sage-fp16` aliases.
+  2. **Install ComfyUI with Accelerator** — uses bundled `assets/acceleritor_torch271cu128.txt` (torch 2.7.1 cu128 + FlashAttention/SageAttention/Triton; native PyTorch attention without xformers) and adds `comfyui-start-sage` / `comfyui-start-sage-fp16` aliases.
   3. **Install precompiled wheels** — add InsightFace 0.7.3 to an existing ComfyUI venv.
   4. **Install LoRA trainers** — optional Fluxgym helper.
   5. **Extra model paths:** After choosing install options 1 or 2, you can optionally wire up `extra_model_paths.yaml` to share a single models folder across multiple ComfyUI installs—handy when you keep separate ComfyUI versions but want one models cache.

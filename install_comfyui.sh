@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="1.17"
+SCRIPT_VERSION="1.18"
 SCRIPT_SOURCE_URL_DEFAULT="https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install_comfyui.sh"
 SCRIPT_SOURCE_URL="${LINUX_COMFY_INSTALLER_SOURCE:-$SCRIPT_SOURCE_URL_DEFAULT}"
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
@@ -1593,7 +1593,7 @@ except ImportError:
     pass
 PY
 else
-  say "Installing ComfyUI with Accelerator (Torch 2.7.1 CUDA 12.8 + xFormers/FlashAttention/SageAttention/Triton)..."
+  say "Installing ComfyUI with Accelerator (Torch 2.7.1 CUDA 12.8 + FlashAttention/SageAttention/Triton; native PyTorch attention)..."
   ACCEL_FILE_PATH="${INSTALL_DIR}/acceleritor_torch271cu128_lite.txt"
   if [[ ! -f "$ACCELERATOR_LOCAL_PATH" ]]; then
     err "Accelerator file not found at $ACCELERATOR_LOCAL_PATH. Please ensure assets are present."
@@ -1608,7 +1608,7 @@ else
   PIN_FILE="$INSTALL_DIR/.torch-pins.txt"
   python - "$PIN_FILE" <<'PY'
 import sys, importlib.metadata as md
-names = ["torch","torchvision","torchaudio","triton","xformers","flash_attn","sageattention"]
+names = ["torch","torchvision","torchaudio","triton","flash_attn","sageattention"]
 pins = []
 for name in names:
     try:
@@ -1703,7 +1703,7 @@ configure_comfy_aliases "$INSTALL_DIR" "$SAGE_ALIAS_FLAG"
 refresh_comfy_alias_vars "$INSTALL_DIR" "$SAGE_ALIAS_FLAG"
 if [[ "$SAGE_ALIAS_FLAG" -eq 1 ]]; then
   say "Accelerator aliases:"
-  say "  ${COMFY_ALIAS_START:-comfyui-start} uses xFormers by default."
+  say "  ${COMFY_ALIAS_START:-comfyui-start} uses native PyTorch attention (no xformers)."
   say "  ${COMFY_ALIAS_SAGE:-comfyui-start-sage} adds --use-sage-attention."
   say "  ${COMFY_ALIAS_SAGE_FP16:-comfyui-start-sage-fp16} adds --use-sage-attention --fast."
 fi
@@ -1719,7 +1719,7 @@ ALIAS_VENV="${COMFY_ALIAS_VENV:-comfyui-venv}"
 ALIAS_SAGE="${COMFY_ALIAS_SAGE:-}"
 ALIAS_SAGE_FP16="${COMFY_ALIAS_SAGE_FP16:-}"
 if [[ "$INSTALL_MODE" == "accelerator" ]]; then
-  START_NOTE="uses xFormers by default"
+  START_NOTE="with native attention (accelerator stack)"
 else
   START_NOTE="with native attention"
 fi
