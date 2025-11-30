@@ -73,11 +73,13 @@ The script will:
   2. **Install ComfyUI with Accelerator** — uses bundled `assets/acceleritor_torch271cu128.txt` (torch 2.7.1 cu128 + FlashAttention/SageAttention/Triton; native PyTorch attention without xformers) and adds `comfyui-start-sage` / `comfyui-start-sage-fp16` aliases.
   3. **Install precompiled wheels** — add InsightFace 0.7.3 to an existing ComfyUI venv.
   4. **Install LoRA trainers** — optional Fluxgym helper.
+  5. **Install ArcticNodes into an existing ComfyUI** — point at your ComfyUI folder and it will clone/update `custom_nodes/ArcticNodes` there.
   5. **Extra model paths:** After choosing install options 1 or 2, you can optionally wire up `extra_model_paths.yaml` to share a single models folder across multiple ComfyUI installs—handy when you keep separate ComfyUI versions but want one models cache.
 - Flow highlights:
   - Asks for your Linux distribution, installs build deps, and sets up `pyenv` with Python 3.12.6.
   - Clones or refreshes ComfyUI in-place; if the folder already contains ComfyUI, you can refresh without deleting `models/`.
   - Prompts to create `extra_model_paths.yaml` so you can store models on another drive and optionally make that path your default save/load location.
+  - Optionally drops ArcticNodes under `custom_nodes/` for fresh installs (1/2) or via menu option 5 for existing setups.
   - Adds ComfyUI-Manager under `custom_nodes/`.
   - Creates or reuses shell aliases; if other installs already use `comfyui-start`, suffixes like `comfyui-start2` are assigned automatically.
 
