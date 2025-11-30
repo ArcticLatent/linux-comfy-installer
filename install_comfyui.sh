@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="1.18"
+SCRIPT_VERSION="1.20"
 SCRIPT_SOURCE_URL_DEFAULT="https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install_comfyui.sh"
 SCRIPT_SOURCE_URL="${LINUX_COMFY_INSTALLER_SOURCE:-$SCRIPT_SOURCE_URL_DEFAULT}"
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
@@ -214,6 +214,28 @@ confirm_choice() {
 }
 
 DEFAULT_COMFY_DIR="${HOME}/ComfyUI"
+INSTALL_ARCTIC_NODES=0
+
+install_arctic_nodes() {
+  local comfy_dir="$1"
+  local custom_nodes_dir="${comfy_dir}/custom_nodes"
+  local arctic_dir="${custom_nodes_dir}/ArcticNodes"
+
+  [[ -n "$comfy_dir" ]] || return 1
+  need_cmd git
+  mkdir -p "$custom_nodes_dir"
+
+  if [[ -d "$arctic_dir/.git" ]]; then
+    say "ArcticNodes already present; pulling latest changes..."
+    git -C "$arctic_dir" pull --ff-only || warn "ArcticNodes update skipped."
+  elif [[ -e "$arctic_dir" ]]; then
+    warn "ArcticNodes path already exists and is not a git repo; skipping clone."
+    return 0
+  else
+    say "Cloning ArcticNodes into custom_nodes..."
+    git clone --depth=1 https://github.com/ArcticLatent/ArcticNodes "$arctic_dir"
+  fi
+}
 
 prompt_existing_comfy_path() {
   local result_name="$1"
@@ -804,6 +826,16 @@ install_fluxgym_repos() {
   fi
 }
 
+install_arcticnodes_only() {
+  local comfy_dir=""
+  if prompt_existing_comfy_path comfy_dir; then
+    install_arctic_nodes "$comfy_dir"
+    say "ArcticNodes installation finished for ${comfy_dir}."
+  else
+    warn "Could not locate a valid ComfyUI install; skipping ArcticNodes."
+  fi
+}
+
 install_fluxgym_python() {
   local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
   local target_python="3.11.10"
@@ -1227,7 +1259,8 @@ echo "  1) Install ComfyUI (native pytorch attention)"
 echo "  2) Install ComfyUI with Accelerator (Sage, Flash Attention, Triton)"
 echo "  3) Install precompiled wheels"
 echo "  4) Install LoRA Trainers"
-confirm_choice "Enter 1, 2, 3, or 4:" "1 2 3 4" PRIMARY_ACTION
+echo "  5) Install ArcticNodes into an existing ComfyUI"
+confirm_choice "Enter 1, 2, 3, 4, or 5:" "1 2 3 4 5" PRIMARY_ACTION
 
 case "$PRIMARY_ACTION" in
   1)
@@ -1243,6 +1276,10 @@ case "$PRIMARY_ACTION" in
     ;;
   4)
     handle_lora_trainers_menu
+    ;;
+  5)
+    install_arcticnodes_only
+    exit 0
     ;;
 esac
 
@@ -1421,6 +1458,12 @@ while true; do
   fi
   break
 done
+
+ask "Would you like to install ArcticNodes custom nodes after ComfyUI is cloned? (y/n):"
+read -r ARCTIC_CHOICE
+if [[ "$ARCTIC_CHOICE" =~ ^[Yy]$ ]]; then
+  INSTALL_ARCTIC_NODES=1
+fi
 
 OVERWRITE_EXISTING=0
 # Sanity checks & prepare parent directories
@@ -1633,12 +1676,14 @@ fi
 python -m pip install --upgrade pyyaml
 
 # ===================== Custom node bootstrap ======================
-say "Setting up ComfyUI custom nodes (Manager only)..."
+say "Setting up ComfyUI custom nodes..."
 # shellcheck disable=SC1090
 source "$VENV_DIR/bin/activate"
 
 CUSTOM_NODES_DIR="$INSTALL_DIR/custom_nodes"
 mkdir -p "$CUSTOM_NODES_DIR"
+
+[[ "$INSTALL_ARCTIC_NODES" -eq 1 ]] && install_arctic_nodes "$INSTALL_DIR"
 
 MANAGER_DIR="$CUSTOM_NODES_DIR/comfyui-manager"
 if [[ ! -d "$MANAGER_DIR/.git" ]]; then
