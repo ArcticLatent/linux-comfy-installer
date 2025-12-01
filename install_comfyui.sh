@@ -413,7 +413,7 @@ install_insightface_into_comfy() {
     return 0
   fi
 
-  if "$python_bin" - "$pulid_file" <<'PY'; then
+  if "$python_bin" - "$pulid_file" <<'PY'
 import sys, pathlib
 path = pathlib.Path(sys.argv[1])
 old = "def pulid_outer_sample_wrappers_with_override(wrapper_executor, noise, latent_image, sampler, sigmas, denoise_mask=None, callback=None, disable_pbar=False, seed=None):"
