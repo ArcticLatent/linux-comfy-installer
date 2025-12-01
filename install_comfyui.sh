@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="1.20"
+SCRIPT_VERSION="1.22"
 SCRIPT_SOURCE_URL_DEFAULT="https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install_comfyui.sh"
 SCRIPT_SOURCE_URL="${LINUX_COMFY_INSTALLER_SOURCE:-$SCRIPT_SOURCE_URL_DEFAULT}"
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
@@ -364,6 +364,8 @@ install_sageattention_into_comfy() {
 install_insightface_into_comfy() {
   local comfy_dir="$1"
   local python_bin="${comfy_dir}/venv/bin/python"
+  local pip_bin="${comfy_dir}/venv/bin/pip"
+  local custom_nodes_dir="${comfy_dir}/custom_nodes"
   local insight_version="0.7.3"
   local insight_wheel_url="https://huggingface.co/arcticlatent/misc/resolve/main/insightface-${insight_version}-cp312-cp312-linux_x86_64.whl"
 
@@ -373,6 +375,60 @@ install_insightface_into_comfy() {
   else
     err "Failed to install InsightFace ${insight_version} into ${comfy_dir}."
     return 1
+  fi
+
+  # Optional PuLID Flux adjustments: install facenet-pytorch and patch signature if node exists
+  if [[ ! -x "$pip_bin" ]]; then
+    warn "ComfyUI venv pip not found at ${pip_bin}; skipping PuLID Flux tweaks."
+    return 0
+  fi
+  if [[ ! -d "$custom_nodes_dir" ]]; then
+    say "No custom_nodes directory found at ${custom_nodes_dir}; skipping PuLID Flux tweaks."
+    return 0
+  fi
+
+  local pulid_dir=""
+  while IFS= read -r node_path; do
+    local base
+    base="$(basename "$node_path")"
+    if [[ "${base,,}" == "comfyui_pulid_flux_ll" ]]; then
+      pulid_dir="$node_path"
+      break
+    fi
+  done < <(find "$custom_nodes_dir" -maxdepth 1 -mindepth 1 -type d -print 2>/dev/null)
+
+  if [[ -z "$pulid_dir" ]]; then
+    err "you dont have ComfyUI_PuLID_Flux_ll custom node installed in your comfyui install. please first install the custom node using your comfyui manager"
+    return 1
+  fi
+
+  say "Installing facenet-pytorch (no deps) inside ${pulid_dir}..."
+  if ! "$pip_bin" install facenet-pytorch --no-deps; then
+    warn "facenet-pytorch install failed in ${pulid_dir}; please install manually."
+  fi
+
+  local pulid_file="${pulid_dir}/pulidflux.py"
+  if [[ ! -f "$pulid_file" ]]; then
+    warn "pulidflux.py not found in ${pulid_dir}; skipping signature patch."
+    return 0
+  fi
+
+  if "$python_bin" - "$pulid_file" <<'PY'; then
+import sys, pathlib
+path = pathlib.Path(sys.argv[1])
+old = "def pulid_outer_sample_wrappers_with_override(wrapper_executor, noise, latent_image, sampler, sigmas, denoise_mask=None, callback=None, disable_pbar=False, seed=None):"
+new = "def pulid_outer_sample_wrappers_with_override(wrapper_executor, noise, latent_image, sampler, sigmas, denoise_mask=None, callback=None, disable_pbar=False, seed=None, latent_shapes=None):"
+text = path.read_text()
+if old not in text:
+    print("PuLID Flux: target signature not found; no change made.")
+    sys.exit(0)
+path.write_text(text.replace(old, new, 1))
+print("PuLID Flux: updated outer wrapper signature.")
+PY
+  then
+    say "PuLID Flux signature patch complete in ${pulid_file}."
+  else
+    warn "Failed to patch pulidflux.py in ${pulid_dir}."
   fi
 }
 
