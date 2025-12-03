@@ -1312,7 +1312,7 @@ INSTALL_MODE="standard"
 
 say "Choose what you would like to install:"
 echo "  1) Install ComfyUI (native pytorch attention)"
-echo "  2) Install ComfyUI with Accelerator (Sage, Flash Attention, Triton)"
+echo "  2) Install ComfyUI with Accelerator (Sage Attention, Triton)"
 echo "  3) Install precompiled wheels"
 echo "  4) Install LoRA Trainers"
 echo "  5) Install ArcticNodes into an existing ComfyUI"
@@ -1692,7 +1692,7 @@ except ImportError:
     pass
 PY
 else
-  say "Installing ComfyUI with Accelerator (Torch 2.7.1 CUDA 12.8 + FlashAttention/SageAttention/Triton; native PyTorch attention)..."
+  say "Installing ComfyUI with Accelerator (Torch 2.7.1 CUDA 12.8 + SageAttention/Triton; native PyTorch attention)..."
   ACCEL_FILE_PATH="${INSTALL_DIR}/acceleritor_torch271cu128_lite.txt"
   if [[ ! -f "$ACCELERATOR_LOCAL_PATH" ]]; then
     err "Accelerator file not found at $ACCELERATOR_LOCAL_PATH. Please ensure assets are present."
@@ -1707,7 +1707,7 @@ else
   PIN_FILE="$INSTALL_DIR/.torch-pins.txt"
   python - "$PIN_FILE" <<'PY'
 import sys, importlib.metadata as md
-names = ["torch","torchvision","torchaudio","triton","flash_attn","sageattention"]
+names = ["torch","torchvision","torchaudio","triton","sageattention"]
 pins = []
 for name in names:
     try:
