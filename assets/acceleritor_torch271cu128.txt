@@ -10,11 +10,11 @@ torchaudio
 
 # TRITON********************************************************************
 # Needs Pytorch
-triton==3.3.1 ; sys_platform == 'linux'
+triton==3.4.0 ; sys_platform == 'linux'
 
 
 #SAGE ATTENTION*************************************************************
 #Needs Pytorch, Triton
-https://huggingface.co/arcticlatent/accelerator/resolve/main/sageattention-2.2.0-torch-2.8.0-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux' and python_version == "3.12" #egg:v2.2.2
+https://huggingface.co/arcticlatent/accelerator/resolve/main/sageattention-2.2.0%2Btorch2.8.0-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux' and python_version == "3.12" #egg:v2.2.2
 
 # Using native PyTorch SDPA for attention (no xformers)
