@@ -616,6 +616,8 @@ configure_comfy_aliases() {
       fi
     fi
 
+    fi
+
     return 0
   fi
 
