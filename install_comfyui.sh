@@ -1958,12 +1958,12 @@ if [[ "$ATTENTION_ALIAS_MODE" == "sage" ]]; then
   say "Sage attention aliases:"
   say "  ${COMFY_ALIAS_START:-comfyui-start} uses native PyTorch attention (no xformers)."
   say "  ${COMFY_ALIAS_SAGE:-comfyui-start-sage} adds --use-sage-attention."
-  say "  ${COMFY_ALIAS_SAGE_FP16:-comfyui-start-sage-fp16} adds --use-sage-attention --fast."
+  say "  ${COMFY_ALIAS_SAGE_FP16:-comfyui-start-sage-fp16} adds --use-sage-attention with fp16 accumulation (--fast)."
 elif [[ "$ATTENTION_ALIAS_MODE" == "flash" ]]; then
   say "Flash attention aliases:"
   say "  ${COMFY_ALIAS_START:-comfyui-start} uses native PyTorch attention (no xformers)."
   say "  ${COMFY_ALIAS_FLASH:-comfyui-start-flash} adds --use-flash-attention."
-  say "  ${COMFY_ALIAS_FLASH_FP16:-comfyui-start-flash-fp16} adds --use-flash-attention --fast."
+  say "  ${COMFY_ALIAS_FLASH_FP16:-comfyui-start-flash-fp16} adds --use-flash-attention with fp16 accumulation (--fast)."
 fi
 
 # ============================ finishing ===========================
@@ -1995,11 +1995,11 @@ echo "       ${ALIAS_START}        # activate venv + launch ${START_NOTE}"
 case "$INSTALL_MODE" in
   accelerator)
     echo "       ${ALIAS_SAGE:-comfyui-start-sage}        # activate venv + launch with SageAttention (--use-sage-attention)"
-    echo "       ${ALIAS_SAGE_FP16:-comfyui-start-sage-fp16}   # activate venv + launch with SageAttention (--use-sage-attention --fast)"
+    echo "       ${ALIAS_SAGE_FP16:-comfyui-start-sage-fp16}   # activate venv + launch with SageAttention with fp16 accumulation (--use-sage-attention --fast)"
     ;;
   flash)
     echo "       ${ALIAS_FLASH:-comfyui-start-flash}        # activate venv + launch with Flash Attention (--use-flash-attention)"
-    echo "       ${ALIAS_FLASH_FP16:-comfyui-start-flash-fp16}   # activate venv + launch with Flash Attention (--use-flash-attention --fast)"
+    echo "       ${ALIAS_FLASH_FP16:-comfyui-start-flash-fp16}   # activate venv + launch with Flash Attention with fp16 accumulation (--use-flash-attention --fast)"
     ;;
 esac
 echo "       ${ALIAS_VENV}         # activate venv only"
