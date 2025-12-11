@@ -1,0 +1,20 @@
+#PYTORCH*********************************************************************
+# --extra-index-url=https://download.pytorch.org/whl/nightly/cpu ; sys_platform  == 'darwin'
+--extra-index-url=https://download.pytorch.org/whl/cu128
+torch==2.8.0 ; sys_platform  != 'darwin'
+torch ; sys_platform  == 'darwin'
+torchsde
+torchvision
+torchaudio
+
+
+# TRITON********************************************************************
+# Needs Pytorch
+triton==3.4.0 ; sys_platform == 'linux'
+
+
+#FLASH ATTENTION*************************************************************
+#Needs Pytorch, Triton
+https://huggingface.co/arcticlatent/accelerator/resolve/main/flash_attn-2.8.3%2Btorch-2.8.0-cp312-cp312-linux_x86_64.whl ; sys_platform == 'linux' and python_version == "3.12" #egg:v2.2.2
+
+# Using native PyTorch SDPA for attention (no xformers)
