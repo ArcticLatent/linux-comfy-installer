@@ -11,20 +11,20 @@
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.8.0%2Bcu128-EE4C2C?logo=pytorch&logoColor=white)
 ![CUDA](https://img.shields.io/badge/CUDA-12.8-76B900?logo=nvidia&logoColor=white)
 
-A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyUI) that works seamlessly across **Fedora**, **Ubuntu/Linux Mint**, and **Arch-based** Linux distributions — with automatic NVIDIA GPU detection, proper CUDA-compatible PyTorch install, and clean `pyenv` isolation.
+A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyUI) that works seamlessly across **Fedora**, **Ubuntu/Linux Mint**, **Debian 13**, and **Arch-based** Linux distributions — with automatic NVIDIA GPU detection, proper CUDA-compatible PyTorch install, and clean `pyenv` isolation.
 
 ---
 
 ## 🚀 Features
 
-- 🧠 **Distro-aware:** Detects and installs required packages for Fedora, Ubuntu/Linux Mint, or Arch-based systems.
+- 🧠 **Distro-aware:** Detects and installs required packages for Fedora, Ubuntu/Linux Mint, Debian 13, or Arch-based systems.
 - ⚙️ **Unified GPU stack:** Installs a single CUDA 12.8 stack (PyTorch 2.8.0 + cu128) that works on RTX 3000 / 4000 / 5000 series.
 - 🐍 **Python isolation:** Uses **pyenv** to manage Python 3.12.6 safely without polluting your system.
 - 🧩 **Dependencies handled:** Installs build tools, curl, git, ffmpeg, and all other required dev packages automatically.
-- 🎮 **Two install modes:** Option 1 installs native PyTorch attention (no xformers); Option 2 installs the Accelerator stack (Torch 2.7.1 cu128 + FlashAttention/SageAttention/Triton, still no xformers) using the bundled `assets/acceleritor_torch271cu128.txt`.
+- 🎮 **Three install modes:** Native PyTorch attention (no xformers); Sage Attention stack (Torch 2.8.0 cu128 + Triton via `assets/sage.txt`); Flash Attention stack (Torch 2.8.0 cu128 + Triton via `assets/flash.txt`). All avoid xformers by default.
 - 📂 **Extra model folder:** Optionally writes `extra_model_paths.yaml` so you can point ComfyUI at a separate models directory (and even make it the default).
 - 🧱 **Custom nodes bootstrap:** Drops in ComfyUI-Manager automatically so you have the essentials out of the box.
-- 💻 **Shell-aware aliases:** Creates/updates `comfyui-start` / `comfyui-venv` and, for Accelerator installs, `comfyui-start-sage` / `comfyui-start-sage-fp16`; suffixes are handled when multiple installs exist.
+- 💻 **Shell-aware aliases:** Creates/updates `comfyui-start` / `comfyui-venv` and, for Sage installs, `comfyui-start-sage` / `comfyui-start-sage-fp16`; for Flash installs, `comfyui-start-flash` / `comfyui-start-flash-fp16`. Suffixes are handled when multiple installs exist.
 - 🧼 **Re-runnable:** Detects existing installs, reuses/updates aliases instead of duplicating them, and refreshes code in-place without deleting your `models/`.
 - 🛡️ **Install guardrails:** Prompts before overwriting an existing ComfyUI folder; refreshes code while keeping your downloaded models intact.
 
@@ -36,6 +36,7 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 |---------|-----------------|------------|
 | Fedora 41 / 42 | `dnf5` | ✅ |
 | Ubuntu 22.04 / 24.04 / Linux Mint 22+ | `apt` | ✅ |
+| Debian 13 | `apt` | ✅ |
 | Arch / EndeavourOS / Manjaro | `pacman` | ✅ |
 
 ---
@@ -70,18 +71,18 @@ The script will:
 
 - Present a main menu:
   1. **Install ComfyUI (native PyTorch attention)** — unified CUDA 12.8 stack (torch 2.8.0 cu128).
-  2. **Install ComfyUI with Accelerator** — uses bundled `assets/acceleritor_torch271cu128.txt` (torch 2.7.1 cu128 + FlashAttention/SageAttention/Triton; native PyTorch attention without xformers) and adds `comfyui-start-sage` / `comfyui-start-sage-fp16` aliases.
-  3. **Install precompiled wheels** — add InsightFace 0.7.3 to an existing ComfyUI venv.
-  4. **Install LoRA trainers** — optional Fluxgym helper.
-  5. **Install ArcticNodes into an existing ComfyUI** — point at your ComfyUI folder and it will clone/update `custom_nodes/ArcticNodes` there.
-  5. **Extra model paths:** After choosing install options 1 or 2, you can optionally wire up `extra_model_paths.yaml` to share a single models folder across multiple ComfyUI installs—handy when you keep separate ComfyUI versions but want one models cache.
+  2. **Install ComfyUI with Sage Attention** — uses bundled `assets/sage.txt` (torch 2.8.0 cu128 + Triton + SageAttention; native PyTorch attention without xformers) and adds `comfyui-start-sage` / `comfyui-start-sage-fp16` aliases.
+  3. **Install ComfyUI with Flash Attention** — uses bundled `assets/flash.txt` (torch 2.8.0 cu128 + Triton + FlashAttention; native PyTorch attention without xformers) and adds `comfyui-start-flash` / `comfyui-start-flash-fp16` aliases.
+  4. **Install precompiled wheels** — add InsightFace 0.7.3 to an existing ComfyUI venv.
+  5. **Install LoRA trainers** — optional Fluxgym helper.
+  6. **Install ArcticNodes into an existing ComfyUI** — point at your ComfyUI folder and it will clone/update `custom_nodes/ArcticNodes` there.
 - Flow highlights:
   - Asks for your Linux distribution, installs build deps, and sets up `pyenv` with Python 3.12.6.
   - Clones or refreshes ComfyUI in-place; if the folder already contains ComfyUI, you can refresh without deleting `models/`.
   - Prompts to create `extra_model_paths.yaml` so you can store models on another drive and optionally make that path your default save/load location.
-  - Optionally drops ArcticNodes under `custom_nodes/` for fresh installs (1/2) or via menu option 5 for existing setups.
+  - Optionally drops ArcticNodes under `custom_nodes/` for fresh installs (1/2/3) or via menu option 6 for existing setups.
   - Adds ComfyUI-Manager under `custom_nodes/`.
-  - Creates or reuses shell aliases; if other installs already use `comfyui-start`, suffixes like `comfyui-start2` are assigned automatically.
+  - Creates or reuses shell aliases; if other installs already use `comfyui-start`, suffixes like `comfyui-start2` are assigned automatically. Sage installs add `comfyui-start-sage` / `comfyui-start-sage-fp16`; Flash installs add `comfyui-start-flash` / `comfyui-start-flash-fp16`.
 
 ---
 
@@ -97,9 +98,13 @@ This will:
 - Activate the virtual environment
 - Start ComfyUI with the correct PyTorch + CUDA stack
 
-If you installed with the Accelerator option, you also get:
+If you installed with the Sage Attention option, you also get:
 - `comfyui-start-sage` (`--use-sage-attention`)
 - `comfyui-start-sage-fp16` (`--use-sage-attention --fast`)
+
+If you installed with the Flash Attention option, you also get:
+- `comfyui-start-flash` (`--use-flash-attention`)
+- `comfyui-start-flash-fp16` (`--use-flash-attention --fast`)
 
 If suffixes were needed (e.g., `comfyui-start2`), use the names shown at the end of the installer output.
 
@@ -119,7 +124,7 @@ Tip: This is handy when you run multiple ComfyUI installs—point them all to th
 
 ### Precompiled wheel installer
 
-Run the script again and pick option **3) Install precompiled wheels** to add extra packages to an existing ComfyUI setup. The installer will:
+Run the script again and pick option **4) Install precompiled wheels** to add extra packages to an existing ComfyUI setup. The installer will:
 
 - Validate the ComfyUI directory and virtual environment you point it to.
 - Offer the current catalog of Linux wheels:
@@ -164,6 +169,8 @@ If you’re running from a read-only location or behind a strict firewall, you c
 | Bash | `comfyui-start`, `comfyui-venv` | `~/.bashrc` |
 | Zsh | `comfyui-start`, `comfyui-venv` | `~/.zshrc` |
 | Fish | `comfyui-start`, `comfyui-venv` | `~/.config/fish/config.fish` |
+
+Sage or Flash installs add their corresponding start aliases to the same shell config files.
 
 ---
 
