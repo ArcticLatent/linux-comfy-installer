@@ -513,11 +513,19 @@ configure_comfy_aliases() {
         esac
       done < <(grep -E '^alias[[:space:]]+comfyui-(start|venv)[^[:space:]]*' "$rc" || true)
 
-      # If this run is native (no attention), remove attention aliases from this rc
+      # Remove aliases that don't match current attention mode to avoid stale entries
       if [[ "$include_attention" -eq 0 ]]; then
         sed -i '/alias[[:space:]]\+comfyui-start-sage/d;/alias[[:space:]]\+comfyui-start-sage-fp16/d;/alias[[:space:]]\+comfyui-start-flash/d;/alias[[:space:]]\+comfyui-start-flash-fp16/d' "$rc"
         COMFY_ALIAS_SAGE=""
         COMFY_ALIAS_SAGE_FP16=""
+        COMFY_ALIAS_FLASH=""
+        COMFY_ALIAS_FLASH_FP16=""
+      elif [[ "$attention_prefix" == "flash" ]]; then
+        sed -i '/alias[[:space:]]\+comfyui-start-sage/d;/alias[[:space:]]\+comfyui-start-sage-fp16/d' "$rc"
+        COMFY_ALIAS_SAGE=""
+        COMFY_ALIAS_SAGE_FP16=""
+      elif [[ "$attention_prefix" == "sage" ]]; then
+        sed -i '/alias[[:space:]]\+comfyui-start-flash/d;/alias[[:space:]]\+comfyui-start-flash-fp16/d' "$rc"
         COMFY_ALIAS_FLASH=""
         COMFY_ALIAS_FLASH_FP16=""
       fi
