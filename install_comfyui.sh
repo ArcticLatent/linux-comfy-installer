@@ -1891,6 +1891,15 @@ mkdir -p "$CUSTOM_NODES_DIR"
 
 [[ "$INSTALL_ARCTIC_NODES" -eq 1 ]] && install_arctic_nodes "$INSTALL_DIR"
 
+MANAGER_DIR="$CUSTOM_NODES_DIR/comfyui-manager"
+if [[ ! -d "$MANAGER_DIR/.git" ]]; then
+  say "Cloning ComfyUI-Manager into custom_nodes..."
+  git clone --depth=1 https://github.com/ltdrdata/ComfyUI-Manager "$MANAGER_DIR"
+else
+  say "ComfyUI-Manager already exists; pulling latest changes..."
+  git -C "$MANAGER_DIR" pull --ff-only || warn "ComfyUI-Manager update skipped."
+fi
+
 # ====================== Modernize NVML binding ====================
 say "Replacing deprecated pynvml package with nvidia-ml-py..."
 python - <<'PY'
