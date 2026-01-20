@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="1.24"
+SCRIPT_VERSION="1.25"
 SCRIPT_SOURCE_URL_DEFAULT="https://raw.githubusercontent.com/ArcticLatent/linux-comfy-installer/main/install_comfyui.sh"
 SCRIPT_SOURCE_URL="${LINUX_COMFY_INSTALLER_SOURCE:-$SCRIPT_SOURCE_URL_DEFAULT}"
 SCRIPT_DIR="$(cd -- "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
@@ -235,6 +235,69 @@ install_arctic_nodes() {
   else
     say "Cloning ArcticNodes into custom_nodes..."
     git clone --depth=1 https://github.com/ArcticLatent/ArcticNodes "$arctic_dir"
+  fi
+}
+
+install_trellis2_nodes() {
+  local comfy_dir="$1"
+  local custom_nodes_dir="${comfy_dir}/custom_nodes"
+  local trellis_dir="${custom_nodes_dir}/ComfyUI-TRELLIS2"
+  local geometry_dir="${custom_nodes_dir}/ComfyUI-GeometryPack"
+  local venv_python="${comfy_dir}/venv/bin/python"
+  local venv_activate="${comfy_dir}/venv/bin/activate"
+
+  [[ -n "$comfy_dir" ]] || return 1
+  need_cmd git
+  if [[ ! -x "$venv_python" ]]; then
+    err "ComfyUI venv python not found at ${venv_python}."
+    return 1
+  fi
+  mkdir -p "$custom_nodes_dir"
+
+  if [[ -d "$trellis_dir/.git" ]]; then
+    say "ComfyUI-TRELLIS2 already present; pulling latest changes..."
+    git -C "$trellis_dir" pull --ff-only || warn "ComfyUI-TRELLIS2 update skipped."
+  elif [[ -e "$trellis_dir" ]]; then
+    warn "ComfyUI-TRELLIS2 path already exists and is not a git repo; skipping clone."
+  else
+    say "Cloning ComfyUI-TRELLIS2 into custom_nodes..."
+    git clone --depth=1 https://github.com/ArcticLatent/ComfyUI-TRELLIS2 "$trellis_dir"
+  fi
+
+  if [[ -f "$trellis_dir/requirements.txt" ]]; then
+    say "Installing ComfyUI-TRELLIS2 requirements into ${comfy_dir} venv..."
+    if [[ -f "$venv_activate" ]]; then
+      (source "$venv_activate" && pip install -r "$trellis_dir/requirements.txt") || \
+        warn "ComfyUI-TRELLIS2 requirements install failed."
+    else
+      "$venv_python" -m pip install -r "$trellis_dir/requirements.txt" || \
+        warn "ComfyUI-TRELLIS2 requirements install failed."
+    fi
+  else
+    warn "requirements.txt not found in ${trellis_dir}; skipping pip install."
+  fi
+
+  if [[ -d "$geometry_dir/.git" ]]; then
+    say "ComfyUI-GeometryPack already present; pulling latest changes..."
+    git -C "$geometry_dir" pull --ff-only || warn "ComfyUI-GeometryPack update skipped."
+  elif [[ -e "$geometry_dir" ]]; then
+    warn "ComfyUI-GeometryPack path already exists and is not a git repo; skipping clone."
+  else
+    say "Cloning ComfyUI-GeometryPack into custom_nodes..."
+    git clone --depth=1 https://github.com/PozzettiAndrea/ComfyUI-GeometryPack "$geometry_dir"
+  fi
+
+  if [[ -f "$geometry_dir/requirements.txt" ]]; then
+    say "Installing ComfyUI-GeometryPack requirements into ${comfy_dir} venv..."
+    if [[ -f "$venv_activate" ]]; then
+      (source "$venv_activate" && pip install -r "$geometry_dir/requirements.txt") || \
+        warn "ComfyUI-GeometryPack requirements install failed."
+    else
+      "$venv_python" -m pip install -r "$geometry_dir/requirements.txt" || \
+        warn "ComfyUI-GeometryPack requirements install failed."
+    fi
+  else
+    warn "requirements.txt not found in ${geometry_dir}; skipping pip install."
   fi
 }
 
@@ -994,6 +1057,16 @@ install_arcticnodes_only() {
   fi
 }
 
+install_trellis2_only() {
+  local comfy_dir=""
+  if prompt_existing_comfy_path comfy_dir; then
+    install_trellis2_nodes "$comfy_dir"
+    say "ComfyUI-TRELLIS2 installation finished for ${comfy_dir}."
+  else
+    warn "Could not locate a valid ComfyUI install; skipping ComfyUI-TRELLIS2."
+  fi
+}
+
 install_fluxgym_python() {
   local fluxgym_dir="${FLUXGYM_DIR:-${FLUXGYM_DIR_DEFAULT}}"
   local target_python="3.11.10"
@@ -1419,7 +1492,8 @@ echo "  3) Install ComfyUI with Flash Attention"
 echo "  4) Install precompiled wheels"
 echo "  5) Install LoRA Trainers"
 echo "  6) Install ArcticNodes into an existing ComfyUI"
-confirm_choice "Enter 1, 2, 3, 4, 5, or 6:" "1 2 3 4 5 6" PRIMARY_ACTION
+echo "  7) Install Trellis.2 into an existing ComfyUI"
+confirm_choice "Enter 1, 2, 3, 4, 5, 6, or 7:" "1 2 3 4 5 6 7" PRIMARY_ACTION
 
 case "$PRIMARY_ACTION" in
   1)
@@ -1442,6 +1516,10 @@ case "$PRIMARY_ACTION" in
     ;;
   6)
     install_arcticnodes_only
+    exit 0
+    ;;
+  7)
+    install_trellis2_only
     exit 0
     ;;
 esac
