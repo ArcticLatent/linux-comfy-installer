@@ -243,7 +243,7 @@ install_trellis2_nodes() {
   local custom_nodes_dir="${comfy_dir}/custom_nodes"
   local trellis_dir="${custom_nodes_dir}/ComfyUI-TRELLIS2"
   local geometry_dir="${custom_nodes_dir}/ComfyUI-GeometryPack"
-  local ultrashape_dir="${custom_nodes_dir}/ComfyUI-UltraShape"
+  local ultrashape1_dir="${custom_nodes_dir}/ComfyUI-UltraShape1"
   local venv_python="${comfy_dir}/venv/bin/python"
   local venv_activate="${comfy_dir}/venv/bin/activate"
 
@@ -301,41 +301,42 @@ install_trellis2_nodes() {
     warn "requirements.txt not found in ${geometry_dir}; skipping pip install."
   fi
 
-  if [[ -d "$ultrashape_dir/.git" ]]; then
-    say "ComfyUI-UltraShape already present; pulling latest changes..."
-    git -C "$ultrashape_dir" pull --ff-only || warn "ComfyUI-UltraShape update skipped."
-  elif [[ -e "$ultrashape_dir" ]]; then
-    warn "ComfyUI-UltraShape path already exists and is not a git repo; skipping clone."
+  if [[ -d "$ultrashape1_dir/.git" ]]; then
+    say "ComfyUI-UltraShape1 already present; pulling latest changes..."
+    git -C "$ultrashape1_dir" pull --ff-only || warn "ComfyUI-UltraShape1 update skipped."
+  elif [[ -e "$ultrashape1_dir" ]]; then
+    warn "ComfyUI-UltraShape1 path already exists and is not a git repo; skipping clone."
   else
-    say "Cloning ComfyUI-UltraShape into custom_nodes..."
-    git clone --depth=1 https://github.com/Rizzlord/ComfyUI-UltraShape "$ultrashape_dir"
+    say "Cloning ComfyUI-UltraShape1 into custom_nodes..."
+    git clone --depth=1 https://github.com/jtydhr88/ComfyUI-UltraShape1 "$ultrashape1_dir"
   fi
 
-  if [[ -f "$ultrashape_dir/requirements.txt" ]]; then
-    say "Installing ComfyUI-UltraShape requirements into ${comfy_dir} venv..."
+  if [[ -f "$ultrashape1_dir/requirements.txt" ]]; then
+    say "Installing ComfyUI-UltraShape1 requirements into ${comfy_dir} venv..."
     if [[ -f "$venv_activate" ]]; then
-      (source "$venv_activate" && pip install -r "$ultrashape_dir/requirements.txt") || \
-        warn "ComfyUI-UltraShape requirements install failed."
+      (source "$venv_activate" && cd "$ultrashape1_dir" && pip install -r requirements.txt && \
+        pip install -U accelerate) || \
+        warn "ComfyUI-UltraShape1 requirements install failed."
     else
-      "$venv_python" -m pip install -r "$ultrashape_dir/requirements.txt" || \
-        warn "ComfyUI-UltraShape requirements install failed."
+      (cd "$ultrashape1_dir" && "$venv_python" -m pip install -r requirements.txt && \
+        "$venv_python" -m pip install -U accelerate) || \
+        warn "ComfyUI-UltraShape1 requirements install failed."
     fi
   else
-    say "requirements.txt not found in ${ultrashape_dir}; installing default UltraShape deps..."
-    local ultrashape_deps=(
-      "trimesh>=4.0.0"
-      "omegaconf>=2.3.0"
-      "einops>=0.8.0"
-      "pymeshlab"
-      "diffusers"
-      "pytorch-lightning"
-    )
-    if [[ -f "$venv_activate" ]]; then
-      (source "$venv_activate" && pip install "${ultrashape_deps[@]}") || \
-        warn "ComfyUI-UltraShape default deps install failed."
-    else
-      "$venv_python" -m pip install "${ultrashape_deps[@]}" || \
-        warn "ComfyUI-UltraShape default deps install failed."
+    warn "requirements.txt not found in ${ultrashape1_dir}; skipping pip install."
+  fi
+
+  local ultrashape_models_dir="${comfy_dir}/models/UltraShape"
+  local ultrashape_model_file="${ultrashape_models_dir}/ultrashape_v1.pt"
+  local ultrashape_model_url="https://huggingface.co/infinith/UltraShape/resolve/main/ultrashape_v1.pt"
+
+  mkdir -p "$ultrashape_models_dir"
+  if [[ -f "$ultrashape_model_file" ]]; then
+    say "UltraShape model already present at ${ultrashape_model_file}; skipping download."
+  else
+    say "Downloading UltraShape model to ${ultrashape_model_file}..."
+    if ! download_remote_script "$ultrashape_model_url" "$ultrashape_model_file"; then
+      warn "UltraShape model download failed."
     fi
   fi
 }

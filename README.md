@@ -24,7 +24,7 @@ A **universal installer** for [ComfyUI](https://github.com/comfyanonymous/ComfyU
 - 🎮 **Three install modes:** Native PyTorch attention (no xformers); Sage Attention stack (Torch 2.8.0 cu128 + Triton via `assets/sage.txt`); Flash Attention stack (Torch 2.8.0 cu128 + Triton via `assets/flash.txt`). All avoid xformers by default.
 - 📂 **Extra model folder:** Optionally writes `extra_model_paths.yaml` so you can point ComfyUI at a separate models directory (and even make it the default).
 - 🧱 **Custom nodes bootstrap:** Drops in ComfyUI-Manager automatically so you have the essentials out of the box.
-- 🌿 **Trellis.2 add-on:** Installs ComfyUI-TRELLIS2 + ComfyUI-GeometryPack + ComfyUI-UltraShape into an existing ComfyUI venv and installs their requirements.
+- 🌿 **Trellis.2 add-on:** Installs ComfyUI-TRELLIS2 + ComfyUI-GeometryPack + ComfyUI-UltraShape1 into an existing ComfyUI venv and installs their requirements.
 - 💻 **Shell-aware aliases:** Creates/updates `comfyui-start` / `comfyui-venv` and, for Sage installs, `comfyui-start-sage` / `comfyui-start-sage-fp16`; for Flash installs, `comfyui-start-flash` / `comfyui-start-flash-fp16`. Suffixes are handled when multiple installs exist.
 - 🧼 **Re-runnable:** Detects existing installs, reuses/updates aliases instead of duplicating them, and refreshes code in-place without deleting your `models/`.
 - 🛡️ **Install guardrails:** Prompts before overwriting an existing ComfyUI folder; refreshes code while keeping your downloaded models intact.
