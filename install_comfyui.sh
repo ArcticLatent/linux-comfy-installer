@@ -1664,6 +1664,22 @@ elif [[ "$OS_NAME" == "debian13" ]]; then
 
 elif [[ "$OS_NAME" == "arch" ]]; then
   sudo pacman -Syu --noconfirm
+  if pacman -Qq zlib-ng-compat >/dev/null 2>&1; then
+    zlib_replacement_pkgs=(zlib)
+    if pacman -Qq lib32-zlib-ng-compat >/dev/null 2>&1; then
+      zlib_replacement_pkgs+=(lib32-zlib)
+    fi
+    warn "Detected zlib-ng-compat, which conflicts with zlib required by this installer."
+    say "Replacing zlib-ng-compat stack in a single pacman transaction..."
+    set +o pipefail
+    yes | sudo pacman -S --needed "${zlib_replacement_pkgs[@]}"
+    pacman_replace_status=${PIPESTATUS[1]}
+    set -o pipefail
+    if [[ $pacman_replace_status -ne 0 ]]; then
+      err "Automatic replacement of zlib-ng-compat failed."
+      exit 1
+    fi
+  fi
   sudo pacman -S --noconfirm --needed base-devel git curl ffmpeg cmake \
     openssl zlib bzip2 xz tk sqlite
 fi
